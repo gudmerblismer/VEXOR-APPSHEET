@@ -1,0 +1,31 @@
+name: BORRAR V VIEJA PARA SIEMPRE
+on: workflow_dispatch:
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Borrar todos los iconos viejos
+        run: |
+          rm -rf app/src/main/res/mipmap-mdpi/
+          rm -rf app/src/main/res/mipmap-hdpi/
+          rm -rf app/src/main/res/mipmap-xhdpi/
+          rm -rf app/src/main/res/mipmap-xxhdpi/
+          rm -rf app/src/main/res/mipmap-xxxhdpi/
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          echo "borrado" > app/src/main/res/mipmap-mdpi/.gitkeep
+          echo "borrado" > app/src/main/res/mipmap-hdpi/.gitkeep
+          echo "borrado" > app/src/main/res/mipmap-xhdpi/.gitkeep
+          echo "borrado" > app/src/main/res/mipmap-xxhdpi/.gitkeep
+          echo "borrado" > app/src/main/res/mipmap-xxxhdpi/.gitkeep
+      - name: Commit borrado
+        run: |
+          git config user.name "VEXOR"
+          git config user.email "vexor@bot.com"
+          git add -A
+          git commit -m "Borrar V vieja para siempre - solo icono cliente"
+          git push
