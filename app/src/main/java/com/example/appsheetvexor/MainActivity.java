@@ -185,23 +185,9 @@ public class MainActivity extends AppCompatActivity {
                         + " var panel=document.createElement('div');"
                         + " panel.id='vexor-license-panel';"
                         + " panel.style.cssText='margin:12px;padding:16px;background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);border:1px solid #e6e6ef;font-family:sans-serif;';"
-                        + " panel.innerHTML=`"
-                        + "<div style='text-align:center;margin-bottom:12px;'><div style='font-size:28px;'>📊</div><div style='font-weight:800;color:#8f6bc0;'>GESTIÓN DE LICENCIAS</div><div style='color:#85859c;font-size:11px;'>Administra tu app Vexor</div></div>"
-                        + "<div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;'>"
-                        + "<button id='btn-estado' style='padding:12px 8px;border:none;border-radius:10px;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;font-weight:700;font-size:12px;'>📊<br>ESTADO DE PLAN</button>"
-                        + "<button id='btn-activar' style='padding:12px 8px;border:none;border-radius:10px;background:#26263a;color:#fff;font-weight:700;font-size:12px;'>🔑<br>ACTIVAR PRO</button>"
-                        + "<button id='btn-comprar' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>💳<br>COMPRAR LICENCIA</button>"
-                        + "<button id='btn-acceso' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>⭐<br>CREAR ACCESO DIRECTO</button>"
-                        + "</div>"
-                        + "`;"
+                        + " panel.innerHTML=`<div style='text-align:center;margin-bottom:12px;'><div style='font-size:28px;'>📊</div><div style='font-weight:800;color:#8f6bc0;'>GESTIÓN DE LICENCIAS</div><div style='color:#85859c;font-size:11px;'>Administra tu app Vexor</div></div><div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;'><button id='btn-estado' style='padding:12px 8px;border:none;border-radius:10px;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;font-weight:700;font-size:12px;'>📊<br>ESTADO DE PLAN</button><button id='btn-activar' style='padding:12px 8px;border:none;border-radius:10px;background:#26263a;color:#fff;font-weight:700;font-size:12px;'>🔑<br>ACTIVAR PRO</button><button id='btn-comprar' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>💳<br>COMPRAR LICENCIA</button><button id='btn-acceso' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>⭐<br>CREAR ACCESO DIRECTO</button></div>`;"
                         + " if(target===document.body){ document.body.insertBefore(panel, document.body.firstChild); } else { target.insertBefore(panel, target.firstChild); }"
-                        + " setTimeout(function(){"
-                        + " var b1=document.getElementById('btn-estado'); if(b1) b1.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.estadoPlan(); });"
-                        + " var b2=document.getElementById('btn-activar'); if(b2) b2.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.activarPro(); });"
-                        + " var b3=document.getElementById('btn-comprar'); if(b3) b3.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.comprarLicencia(); });"
-                        + " var b4=document.getElementById('btn-acceso'); if(b4) b4.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.crearAcceso(); });"
-                        + " }, 300);"
-                        + "}"
+                        + " setTimeout(function(){ var b1=document.getElementById('btn-estado'); if(b1) b1.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.estadoPlan(); }); var b2=document.getElementById('btn-activar'); if(b2) b2.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.activarPro(); }); var b3=document.getElementById('btn-comprar'); if(b3) b3.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.comprarLicencia(); }); var b4=document.getElementById('btn-acceso'); if(b4) b4.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.crearAcceso(); }); }, 300);}"
                         + "var currentQrField = null;"
                         + "document.addEventListener('focusin',function(e){ var el=e.target; if(el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA') return; var label=getLabel(el); if(label.indexOf('QR')==-1){ if(currentQrField!==el){ try{window.AndroidQR.hideBtn();}catch(e){} currentQrField=null; } return; } currentQrField=el; if(!el.id) el.id='qr_'+Date.now(); try{window.AndroidQR.setId(el.id);}catch(e){} if(el.value.trim()==''){ try{window.AndroidQR.showBtn();}catch(e){} } else { try{window.AndroidQR.hideBtn();}catch(e){} } });"
                         + "document.addEventListener('focusout',function(e){ var el=e.target; if(el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA') return; setTimeout(function(){ var active=document.activeElement; var stillQr=false; if(active){ var label=getLabel(active); if(label.indexOf('QR')!=-1) stillQr=true; } if(!stillQr){ try{window.AndroidQR.hideBtn();}catch(err){} currentQrField=null; } },200); });"
@@ -229,33 +215,42 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // CARGA CON FIX PARA PRIMER INGRESO
         webView.loadUrl(APPSHEET_URL);
 
-        // FIX: AppSheet necesita crear IndexedDB la primera vez, por eso no funciona hasta el segundo ingreso
-        // Este reload automático solo se ejecuta una vez en la vida de la app
+        // FIX DEFINITIVO PARA PRIMER INGRESO - DOBLE RECARGA (EXPANDIDO)
         SharedPreferences firstPrefs = getSharedPreferences("VEXOR_FIRST", MODE_PRIVATE);
-        if(firstPrefs.getBoolean("primera_vez", true)){
+        int count = firstPrefs.getInt("launch_count", 0);
+        if(count < 2){
             webView.postDelayed(() -> {
                 webView.reload();
-                firstPrefs.edit().putBoolean("primera_vez", false).apply();
             }, 2500);
+            webView.postDelayed(() -> {
+                webView.reload();
+                firstPrefs.edit().putInt("launch_count", 2).apply();
+            }, 5500);
         }
     }
 
     private void initVexorLicensing(){
         SharedPreferences prefs = getSharedPreferences("VEXOR_PREFS", MODE_PRIVATE);
         deviceId = prefs.getString("vexor_device_id", "");
-        if(deviceId.isEmpty()){ deviceId = generarDeviceId(); prefs.edit().putString("vexor_device_id", deviceId).apply(); }
+        if(deviceId.isEmpty()){
+            deviceId = generarDeviceId();
+            prefs.edit().putString("vexor_device_id", deviceId).apply();
+        }
         isLicensed = prefs.getBoolean("vexor_licensed", false);
         licensePlan = prefs.getString("vexor_plan", "");
         licenseMax = prefs.getInt("vexor_max", 1);
         licenseUsed = prefs.getInt("vexor_used", 1);
         trialExpiresAt = prefs.getLong("vexor_trial_expires", 0);
-        if(trialExpiresAt==0){ trialExpiresAt = System.currentTimeMillis() + 30L*24*60*60*1000; prefs.edit().putLong("vexor_trial_expires", trialExpiresAt).putBoolean("vexor_trial_allowed", true).putBoolean("vexor_trial_active", true).apply(); }
+        if(trialExpiresAt==0){
+            trialExpiresAt = System.currentTimeMillis() + 30L*24*60*60*1000;
+            prefs.edit().putLong("vexor_trial_expires", trialExpiresAt).putBoolean("vexor_trial_allowed", true).putBoolean("vexor_trial_active", true).apply();
+        }
         recalcularTrial();
         new Thread(() -> syncTrialWithSheet()).start();
     }
+
     private String generarDeviceId(){
         try{
             String androidId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
@@ -263,58 +258,104 @@ public class MainActivity extends AppCompatActivity {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] hash = md.digest(raw.getBytes("UTF-8"));
             StringBuilder sb = new StringBuilder();
-            for(byte b: hash){ sb.append(String.format("%02x", b)); }
+            for(byte b: hash){
+                sb.append(String.format("%02x", b));
+            }
             return "DEV-" + sb.toString().substring(0,16).toUpperCase();
-        }catch(Exception e){ return "DEV-" + System.currentTimeMillis(); }
+        }catch(Exception e){
+            return "DEV-" + System.currentTimeMillis();
+        }
     }
+
     private void recalcularTrial(){
         SharedPreferences prefs = getSharedPreferences("VEXOR_PREFS", MODE_PRIVATE);
         long now = System.currentTimeMillis();
         long diff = trialExpiresAt - now;
         int days = (int)Math.ceil(diff / 86400000.0);
         if(days <=0){
-            trialActive = false; trialAllowed = false; trialDaysLeft = 0;
+            trialActive = false;
+            trialAllowed = false;
+            trialDaysLeft = 0;
             prefs.edit().putBoolean("vexor_trial_active", false).putBoolean("vexor_trial_allowed", false).putBoolean("vexor_trial_expired", true).putInt("vexor_days_left", 0).apply();
         }else{
-            trialActive = true; trialAllowed = true; trialDaysLeft = days;
+            trialActive = true;
+            trialAllowed = true;
+            trialDaysLeft = days;
             prefs.edit().putBoolean("vexor_trial_active", true).putBoolean("vexor_trial_allowed", true).putInt("vexor_days_left", days).apply();
         }
     }
-    private boolean hasAccess(){ if(isLicensed) return true; return trialAllowed && trialActive; }
+
+    private boolean hasAccess(){
+        if(isLicensed) return true;
+        return trialAllowed && trialActive;
+    }
+
     private void syncTrialWithSheet(){
         try{
             String urlStr = GOOGLE_SHEET_API_URL + "?action=check_trial&device_id=" + deviceId;
-            URL url = new URL(urlStr); HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setConnectTimeout(8000); conn.setReadTimeout(8000);
+            URL url = new URL(urlStr);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(8000);
+            conn.setReadTimeout(8000);
             BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-            StringBuilder sb = new StringBuilder(); String line; while((line=br.readLine())!=null) sb.append(line); br.close();
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while((line=br.readLine())!=null) sb.append(line);
+            br.close();
             JSONObject data = new JSONObject(sb.toString());
             if(data.has("expires_at")){
-                String expiresStr = data.optString("expires_at"); long exp = 0;
-                try{ exp = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss").parse(expiresStr).getTime(); }catch(Exception e){ try{ exp = new SimpleDateFormat("yyyy-MM-dd").parse(expiresStr).getTime(); }catch(Exception ee){} }
+                String expiresStr = data.optString("expires_at");
+                long exp = 0;
+                try{
+                    exp = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss").parse(expiresStr).getTime();
+                }catch(Exception e){
+                    try{
+                        exp = new SimpleDateFormat("yyyy-MM-dd").parse(expiresStr).getTime();
+                    }catch(Exception ee){}
+                }
                 if(exp>0){
-                    trialExpiresAt = exp; SharedPreferences prefs = getSharedPreferences("VEXOR_PREFS", MODE_PRIVATE);
+                    trialExpiresAt = exp;
+                    SharedPreferences prefs = getSharedPreferences("VEXOR_PREFS", MODE_PRIVATE);
                     prefs.edit().putLong("vexor_trial_expires", exp).putBoolean("vexor_trial_allowed", data.optBoolean("allowed", true)).putBoolean("vexor_trial_active", data.optBoolean("trial_active", true)).putBoolean("vexor_trial_expired", data.optBoolean("trial_expired", false)).putInt("vexor_days_left", data.optInt("days_left", trialDaysLeft)).apply();
-                    trialAllowed = data.optBoolean("allowed", trialAllowed); trialActive = data.optBoolean("trial_active", trialActive); trialDaysLeft = data.optInt("days_left", trialDaysLeft);
+                    trialAllowed = data.optBoolean("allowed", trialAllowed);
+                    trialActive = data.optBoolean("trial_active", trialActive);
+                    trialDaysLeft = data.optInt("days_left", trialDaysLeft);
                 }
             }
-        }catch(Exception e){ e.printStackTrace(); }
+        }catch(Exception e){
+            e.printStackTrace();
+        }
     }
+
     private void verificarLicenciaConSheet(String key, LicenseCallback cb){
         new Thread(() -> {
             try{
                 String urlStr = GOOGLE_SHEET_API_URL + "?action=activate&license_key=" + Uri.encode(key) + "&device_id=" + deviceId;
-                URL url = new URL(urlStr); HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setConnectTimeout(10000); conn.setReadTimeout(10000);
+                URL url = new URL(urlStr);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(10000);
                 BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                StringBuilder sb = new StringBuilder(); String line; while((line=br.readLine())!=null) sb.append(line); br.close();
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while((line=br.readLine())!=null) sb.append(line);
+                br.close();
                 JSONObject data = new JSONObject(sb.toString());
-                if(data.has("error")){ runOnUiThread(() -> cb.onResult(false, data.optString("error"), null)); }
-                else{ runOnUiThread(() -> cb.onResult(data.optBoolean("allowed", false), data.optString("message", ""), data)); }
-            }catch(Exception e){ runOnUiThread(() -> cb.onResult(false, e.getMessage(), null)); }
+                if(data.has("error")){
+                    runOnUiThread(() -> cb.onResult(false, data.optString("error"), null));
+                } else{
+                    runOnUiThread(() -> cb.onResult(data.optBoolean("allowed", false), data.optString("message", ""), data));
+                }
+            }catch(Exception e){
+                runOnUiThread(() -> cb.onResult(false, e.getMessage(), null));
+            }
         }).start();
     }
-    interface LicenseCallback{ void onResult(boolean allowed, String msg, JSONObject data); }
+
+    interface LicenseCallback{
+        void onResult(boolean allowed, String msg, JSONObject data);
+    }
+
     private void mostrarBloqueoPorExpiracion(){
         String html = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'><style>body{font-family:sans-serif;background:#f6f6fa;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}.card{background:#fff;padding:24px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);max-width:320px}.btn{background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:700;margin-top:12px}.btn2{margin-top:10px;background:#26263a;color:#fff;padding:10px 16px;border-radius:8px;border:none;font-weight:700}</style></head><body><div class='card'><h3>❌ Prueba terminada</h3><p>Tu prueba de 30 días terminó.<br><b>💳 Pago único, de por vida</b></p><a class='btn' href='"+PAYPAL_LINK+"' target='_blank'>💳 COMPRAR LICENCIA</a><br><br><button class='btn2' onclick=\"AndroidBridge.abrirActivar()\">🔑 ACTIVAR PRO</button></div></body></html>";
         pdfView.addJavascriptInterface(new Object(){ @JavascriptInterface public void abrirActivar(){ runOnUiThread(() -> { pdfOverlay.setVisibility(View.GONE); mostrarActivarProDialog(); }); } }, "AndroidBridge");
@@ -322,9 +363,11 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btnPdfMenu).setVisibility(View.VISIBLE);
         pdfOverlay.setVisibility(View.VISIBLE);
     }
+
     private void mostrarEstadoPlanDialog(){
         recalcularTrial();
-        String estado; String detalle;
+        String estado;
+        String detalle;
         if(isLicensed){
             estado = "✅ PRO ACTIVA - Dispositivos " + licenseUsed + "/" + licenseMax;
             detalle = "💳 Pago único - De por vida\nNo vuelves a pagar nunca más.\n\n📦 Plan: " + licensePlan + "\n📱 Dispositivos: " + licenseUsed + "/" + licenseMax + " (de por vida)\n\nTodo desbloqueado para siempre:\n✅ Data Studio embebido\n✅ PDFs y URLs\n✅ QR Scanner\n✅ Accesos directos ilimitados";
@@ -335,58 +378,134 @@ public class MainActivity extends AppCompatActivity {
             estado = "❌ PRUEBA TERMINADA";
             detalle = "❌ Tu prueba de 30 días terminó.\n\nRestricciones activas:\n❌ Data Studio bloqueado\n❌ PDF bloqueado\n❌ URLs externas bloqueadas\n✅ QR Scanner sigue funcionando\n\n💳 Compra licencia PRO de por vida\n💰 Pago único, sin mensualidades.\n📱 Incluye 1, 3 o 5 dispositivos según tu plan.";
         }
-        LinearLayout layout = new LinearLayout(this); layout.setOrientation(LinearLayout.VERTICAL); layout.setPadding(40,40,40,40);
-        TextView t1 = new TextView(this); t1.setText(estado); t1.setTextSize(16); t1.setTextColor(0xFF8f6bc0); t1.setPadding(0,0,0,12);
-        TextView t2 = new TextView(this); t2.setText(detalle); t2.setTextSize(13);
-        Button b1 = new Button(this); b1.setText("💳 COMPRAR LICENCIA"); b1.setOnClickListener(v -> { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(PAYPAL_LINK))); });
-        Button b2 = new Button(this); b2.setText("🔑 ACTIVAR PRO"); b2.setOnClickListener(v -> { mostrarActivarProDialog(); });
-        layout.addView(t1); layout.addView(t2); layout.addView(b1); layout.addView(b2);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(40,40,40,40);
+        TextView t1 = new TextView(this);
+        t1.setText(estado);
+        t1.setTextSize(16);
+        t1.setTextColor(0xFF8f6bc0);
+        t1.setPadding(0,0,0,12);
+        TextView t2 = new TextView(this);
+        t2.setText(detalle);
+        t2.setTextSize(13);
+        Button b1 = new Button(this);
+        b1.setText("💳 COMPRAR LICENCIA");
+        b1.setOnClickListener(v -> { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(PAYPAL_LINK))); });
+        Button b2 = new Button(this);
+        b2.setText("🔑 ACTIVAR PRO");
+        b2.setOnClickListener(v -> { mostrarActivarProDialog(); });
+        layout.addView(t1);
+        layout.addView(t2);
+        layout.addView(b1);
+        layout.addView(b2);
         new AlertDialog.Builder(this).setTitle("📊 ESTADO DE PLAN").setView(layout).setPositiveButton("Cerrar", null).show();
     }
+
     private void mostrarActivarProDialog(){
-        LinearLayout layout = new LinearLayout(this); layout.setOrientation(LinearLayout.VERTICAL); layout.setPadding(40,40,40,40);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(40,40,40,40);
         TextView info = new TextView(this);
-        if(isLicensed){ info.setText("✅ PRO ACTIVA - Dispositivos " + licenseUsed + "/" + licenseMax + "\n💳 De por vida - Pago único\n\n🔑 Si quieres usar la misma clave en otro celular, pega la clave abajo:"); }
-        else if(trialActive){ info.setText("⏳ PRUEBA - " + trialDaysLeft + " días restantes\n💳 Luego licencia de por vida\n💰 Pago único, sin mensualidades\n\n🔑 Pega tu clave VEXOR-... aquí abajo:"); }
-        else{ info.setText("❌ VENCIDO\n💳 Compra licencia de por vida\n💰 Pago único, una sola vez\n\n🔑 Si ya pagaste, pega tu clave aquí abajo:"); }
-        info.setTextSize(12); info.setPadding(0,0,0,16);
-        EditText inputKey = new EditText(this); inputKey.setHint("🔑 VEXOR-XXXX-XXXX");
-        TextView error = new TextView(this); error.setTextColor(0xFFE0585A); error.setTextSize(11);
-        TextView devicesInfo = new TextView(this); devicesInfo.setTextSize(11); devicesInfo.setTextColor(0xFF666666);
+        if(isLicensed){
+            info.setText("✅ PRO ACTIVA - Dispositivos " + licenseUsed + "/" + licenseMax + "\n💳 De por vida - Pago único\n\n🔑 Si quieres usar la misma clave en otro celular, pega la clave abajo:");
+        } else if(trialActive){
+            info.setText("⏳ PRUEBA - " + trialDaysLeft + " días restantes\n💳 Luego licencia de por vida\n💰 Pago único, sin mensualidades\n\n🔑 Pega tu clave VEXOR-... aquí abajo:");
+        } else{
+            info.setText("❌ VENCIDO\n💳 Compra licencia de por vida\n💰 Pago único, una sola vez\n\n🔑 Si ya pagaste, pega tu clave aquí abajo:");
+        }
+        info.setTextSize(12);
+        info.setPadding(0,0,0,16);
+        EditText inputKey = new EditText(this);
+        inputKey.setHint("🔑 VEXOR-XXXX-XXXX");
+        TextView error = new TextView(this);
+        error.setTextColor(0xFFE0585A);
+        error.setTextSize(11);
+        TextView devicesInfo = new TextView(this);
+        devicesInfo.setTextSize(11);
+        devicesInfo.setTextColor(0xFF666666);
         if(isLicensed) devicesInfo.setText("✅ De por vida - " + licenseUsed + "/" + licenseMax + " dispositivos");
         else devicesInfo.setText("💳 Licencia de por vida - Pago único - Sin mensualidades");
-        Button btnComprar = new Button(this); btnComprar.setText("💳 COMPRAR LICENCIA");
-        Button btnActivar = new Button(this); btnActivar.setText("🔑 ACTIVAR PRO");
-        layout.addView(info); layout.addView(inputKey); layout.addView(error); layout.addView(devicesInfo); layout.addView(btnActivar); layout.addView(btnComprar);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("🔑 ACTIVAR PRO").setView(layout).setNegativeButton("Cerrar", null).create(); dialog.show();
+        Button btnComprar = new Button(this);
+        btnComprar.setText("💳 COMPRAR LICENCIA");
+        Button btnActivar = new Button(this);
+        btnActivar.setText("🔑 ACTIVAR PRO");
+        layout.addView(info);
+        layout.addView(inputKey);
+        layout.addView(error);
+        layout.addView(devicesInfo);
+        layout.addView(btnActivar);
+        layout.addView(btnComprar);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("🔑 ACTIVAR PRO").setView(layout).setNegativeButton("Cerrar", null).create();
+        dialog.show();
         btnComprar.setOnClickListener(v -> { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(PAYPAL_LINK))); });
         btnActivar.setOnClickListener(v -> {
             String k = inputKey.getText().toString().trim().toUpperCase();
-            if(k.isEmpty()){ error.setText("⚠ Ingresa tu clave"); return; }
-            btnActivar.setEnabled(false); btnActivar.setText("⏳ Verificando...");
+            if(k.isEmpty()){
+                error.setText("⚠ Ingresa tu clave");
+                return;
+            }
+            btnActivar.setEnabled(false);
+            btnActivar.setText("⏳ Verificando...");
             verificarLicenciaConSheet(k, (allowed, msg, data) -> {
-                btnActivar.setEnabled(true); btnActivar.setText("🔑 ACTIVAR PRO");
+                btnActivar.setEnabled(true);
+                btnActivar.setText("🔑 ACTIVAR PRO");
                 if(allowed){
                     SharedPreferences prefs = getSharedPreferences("VEXOR_PREFS", MODE_PRIVATE);
                     prefs.edit().putBoolean("vexor_licensed", true).putString("vexor_plan", data.optString("plan", "PRO")).putString("vexor_license_key", k).putInt("vexor_max", data.optInt("max", 1)).putInt("vexor_used", data.optInt("used", 1)).apply();
-                    isLicensed = true; licensePlan = data.optString("plan", "PRO"); licenseMax = data.optInt("max", 1); licenseUsed = data.optInt("used", 1);
+                    isLicensed = true;
+                    licensePlan = data.optString("plan", "PRO");
+                    licenseMax = data.optInt("max", 1);
+                    licenseUsed = data.optInt("used", 1);
                     Toast.makeText(this, "✅ PRO de por vida - " + licenseUsed + "/" + licenseMax, Toast.LENGTH_LONG).show();
-                    dialog.dismiss(); webView.reload();
-                }else{ error.setText("❌ " + (msg!=null &&!msg.isEmpty()? msg : "Clave inválida")); }
+                    dialog.dismiss();
+                    webView.reload();
+                }else{
+                    error.setText("❌ " + (msg!=null &&!msg.isEmpty()? msg : "Clave inválida"));
+                }
             });
         });
     }
+
     private void mostrarDialogCrearAccesoDirecto(){
         selectedIconBitmap = null;
-        LinearLayout layout = new LinearLayout(this); layout.setOrientation(LinearLayout.VERTICAL); layout.setPadding(40,40,40,40);
-        previewIconView = new ImageView(this); previewIconView.setLayoutParams(new LinearLayout.LayoutParams(200,200)); ((LinearLayout.LayoutParams)previewIconView.getLayoutParams()).gravity = 17;
-        previewIconView.setImageResource(android.R.drawable.ic_menu_gallery); previewIconView.setBackgroundResource(android.R.drawable.picture_frame); layout.addView(previewIconView);
-        Button btnSubir = new Button(this); btnSubir.setText("📁 SUBIR ICONO"); layout.addView(btnSubir);
-        EditText inputNombre = new EditText(this); inputNombre.setHint("Nombre del acceso directo"); inputNombre.setText("Mi App"); layout.addView(inputNombre);
-        TextView desc = new TextView(this); desc.setText("\n512x512 PNG recomendado"); desc.setTextSize(12); desc.setTextColor(0xFF777777); layout.addView(desc);
-        btnSubir.setOnClickListener(v -> { Intent intent = new Intent(Intent.ACTION_GET_CONTENT); intent.setType("image/*"); startActivityForResult(Intent.createChooser(intent, "Selecciona icono"), 1004); });
-        new AlertDialog.Builder(this).setTitle("Crear Acceso Directo").setView(layout).setPositiveButton("CREAR", (d,w) -> { String nombre = inputNombre.getText().toString().trim(); if(nombre.isEmpty()) nombre = "Mi App"; if(selectedIconBitmap == null){ Toast.makeText(this, "Sube un icono primero", Toast.LENGTH_SHORT).show(); return; } crearAccesoDirectoLimpio(nombre, selectedIconBitmap, APPSHEET_URL); }).setNegativeButton("Cancelar", null).show();
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(40,40,40,40);
+        previewIconView = new ImageView(this);
+        previewIconView.setLayoutParams(new LinearLayout.LayoutParams(200,200));
+        ((LinearLayout.LayoutParams)previewIconView.getLayoutParams()).gravity = 17;
+        previewIconView.setImageResource(android.R.drawable.ic_menu_gallery);
+        previewIconView.setBackgroundResource(android.R.drawable.picture_frame);
+        layout.addView(previewIconView);
+        Button btnSubir = new Button(this);
+        btnSubir.setText("📁 SUBIR ICONO");
+        layout.addView(btnSubir);
+        EditText inputNombre = new EditText(this);
+        inputNombre.setHint("Nombre del acceso directo");
+        inputNombre.setText("Mi App");
+        layout.addView(inputNombre);
+        TextView desc = new TextView(this);
+        desc.setText("\n512x512 PNG recomendado");
+        desc.setTextSize(12);
+        desc.setTextColor(0xFF777777);
+        layout.addView(desc);
+        btnSubir.setOnClickListener(v -> {
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("image/*");
+            startActivityForResult(Intent.createChooser(intent, "Selecciona icono"), 1004);
+        });
+        new AlertDialog.Builder(this).setTitle("Crear Acceso Directo").setView(layout).setPositiveButton("CREAR", (d,w) -> {
+            String nombre = inputNombre.getText().toString().trim();
+            if(nombre.isEmpty()) nombre = "Mi App";
+            if(selectedIconBitmap == null){
+                Toast.makeText(this, "Sube un icono primero", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            crearAccesoDirectoLimpio(nombre, selectedIconBitmap, APPSHEET_URL);
+        }).setNegativeButton("Cancelar", null).show();
     }
+
     private void crearAccesoDirectoLimpio(String nombre, Bitmap icono, String url){
         try{
             Bitmap base = Bitmap.createScaledBitmap(icono, 420, 420, true);
@@ -402,69 +521,182 @@ public class MainActivity extends AppCompatActivity {
             ShortcutInfo info = new ShortcutInfo.Builder(this, "vexor_" + System.currentTimeMillis()).setShortLabel(nombre).setLongLabel(nombre).setIcon(iconFinal).setIntent(shortcutIntent).build();
             sm.requestPinShortcut(info, null);
             Toast.makeText(this, "Listo", Toast.LENGTH_LONG).show();
-        }catch(Exception e){ Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show(); }
+        }catch(Exception e){
+            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
+
     private void grabarAudioInterno(){
         if(ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 102);
-            if(filePathCallback!=null){ filePathCallback.onReceiveValue(null); filePathCallback=null; } return;
+            if(filePathCallback!=null){
+                filePathCallback.onReceiveValue(null);
+                filePathCallback=null;
+            }
+            return;
         }
         try{
             tempAudioFile = new File(getCacheDir(), "AUD_"+new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date())+".m4a");
-            recorder = new MediaRecorder(); recorder.setAudioSource(MediaRecorder.AudioSource.MIC); recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4); recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC); recorder.setOutputFile(tempAudioFile.getAbsolutePath()); recorder.prepare(); recorder.start();
+            recorder = new MediaRecorder();
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+            recorder.setOutputFile(tempAudioFile.getAbsolutePath());
+            recorder.prepare();
+            recorder.start();
             AlertDialog d = new AlertDialog.Builder(this).setTitle("🎤 Grabando...").setMessage("Habla ahora").setPositiveButton("DETENER", (dialog, w) -> { detenerAudio(); }).setCancelable(false).show();
-            webView.postDelayed(() -> { if(recorder!=null) { d.dismiss(); detenerAudio(); } }, 60000);
-        }catch(Exception e){ Toast.makeText(this, "Error: "+e.getMessage(), Toast.LENGTH_LONG).show(); if(filePathCallback!=null){ filePathCallback.onReceiveValue(null); filePathCallback=null; } }
+            webView.postDelayed(() -> {
+                if(recorder!=null) {
+                    d.dismiss();
+                    detenerAudio();
+                }
+            }, 60000);
+        }catch(Exception e){
+            Toast.makeText(this, "Error: "+e.getMessage(), Toast.LENGTH_LONG).show();
+            if(filePathCallback!=null){
+                filePathCallback.onReceiveValue(null);
+                filePathCallback=null;
+            }
+        }
     }
+
     private void detenerAudio(){
         try{
-            if(recorder!=null){ recorder.stop(); recorder.release(); recorder=null; }
+            if(recorder!=null){
+                recorder.stop();
+                recorder.release();
+                recorder=null;
+            }
             if(tempAudioFile!=null && tempAudioFile.exists()){
                 Uri uri = FileProvider.getUriForFile(this, getPackageName()+".fileprovider", tempAudioFile);
-                if(filePathCallback!=null){ filePathCallback.onReceiveValue(new Uri[]{uri}); filePathCallback=null; }
-            }else{ if(filePathCallback!=null){ filePathCallback.onReceiveValue(null); filePathCallback=null; } }
-        }catch(Exception e){ if(filePathCallback!=null){ filePathCallback.onReceiveValue(null); filePathCallback=null; } }
+                if(filePathCallback!=null){
+                    filePathCallback.onReceiveValue(new Uri[]{uri});
+                    filePathCallback=null;
+                }
+            }else{
+                if(filePathCallback!=null){
+                    filePathCallback.onReceiveValue(null);
+                    filePathCallback=null;
+                }
+            }
+        }catch(Exception e){
+            if(filePathCallback!=null){
+                filePathCallback.onReceiveValue(null);
+                filePathCallback=null;
+            }
+        }
     }
+
     private void descargarPdfDeAppSheet(String urlPdf){
         Toast.makeText(this, "Abriendo PDF...", Toast.LENGTH_SHORT).show();
         String cookie = CookieManager.getInstance().getCookie(urlPdf);
         String userAgent = webView.getSettings().getUserAgentString();
         new Thread(() -> {
             try{
-                URL url = new URL(urlPdf); HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                if(cookie!=null) conn.setRequestProperty("Cookie", cookie); conn.setRequestProperty("User-Agent", userAgent); conn.connect();
-                InputStream is = conn.getInputStream(); String fileName = "GUIA_"+new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date())+".pdf"; File file = new File(getCacheDir(), fileName);
-                FileOutputStream fos = new FileOutputStream(file); byte[] buffer = new byte[4096]; int len; while((len=is.read(buffer))!=-1){ fos.write(buffer,0,len); } fos.close(); is.close();
+                URL url = new URL(urlPdf);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                if(cookie!=null) conn.setRequestProperty("Cookie", cookie);
+                conn.setRequestProperty("User-Agent", userAgent);
+                conn.connect();
+                InputStream is = conn.getInputStream();
+                String fileName = "GUIA_"+new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date())+".pdf";
+                File file = new File(getCacheDir(), fileName);
+                FileOutputStream fos = new FileOutputStream(file);
+                byte[] buffer = new byte[4096];
+                int len;
+                while((len=is.read(buffer))!=-1){
+                    fos.write(buffer,0,len);
+                }
+                fos.close();
+                is.close();
                 runOnUiThread(() -> mostrarPdfEnVisor(file));
-            }catch(Exception e){ runOnUiThread(() -> Toast.makeText(this, "Error PDF: "+e.getMessage(), Toast.LENGTH_LONG).show()); }
+            }catch(Exception e){
+                runOnUiThread(() -> Toast.makeText(this, "Error PDF: "+e.getMessage(), Toast.LENGTH_LONG).show());
+            }
         }).start();
     }
+
     private void mostrarPdfEnVisor(File file){
         try{
-            pdfFileActual = file; findViewById(R.id.btnPdfMenu).setVisibility(View.VISIBLE);
-            FileInputStream fis = new FileInputStream(file); ByteArrayOutputStream bos = new ByteArrayOutputStream(); byte[] buf = new byte[4096]; int r; while((r = fis.read(buf))!=-1) bos.write(buf, 0, r); fis.close();
+            pdfFileActual = file;
+            findViewById(R.id.btnPdfMenu).setVisibility(View.VISIBLE);
+            FileInputStream fis = new FileInputStream(file);
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buf = new byte[4096];
+            int r;
+            while((r = fis.read(buf))!=-1) bos.write(buf, 0, r);
+            fis.close();
             String base64 = Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP);
             String html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'><script src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'></script><style>body{margin:0;background:#525659;padding:0}.page{margin:10px auto;display:block;box-shadow:0 0 10px #000;width:100%}</style></head><body><div id='container'></div><script>var pdfData=atob('"+base64+"'); pdfjsLib.getDocument({data: pdfData}).promise.then(function(pdf){ var container=document.getElementById('container'); for(let i=1;i<=pdf.numPages;i++){ let canvas=document.createElement('canvas'); canvas.className='page'; container.appendChild(canvas); pdf.getPage(i).then(function(page){ var viewport=page.getViewport({scale:1.2}); canvas.height=viewport.height; canvas.width=viewport.width; page.render({canvasContext:canvas.getContext('2d'), viewport:viewport}); }); } });</script></body></html>";
-            pdfView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null); pdfOverlay.setVisibility(View.VISIBLE);
-        }catch(Exception e){ Toast.makeText(this, "Error visor: "+e.getMessage(), Toast.LENGTH_SHORT).show(); }
+            pdfView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null);
+            pdfOverlay.setVisibility(View.VISIBLE);
+        }catch(Exception e){
+            Toast.makeText(this, "Error visor: "+e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
     }
-    private void mostrarLinkEnVisor(String url){ pdfFileActual = null; findViewById(R.id.btnPdfMenu).setVisibility(View.GONE); pdfView.loadUrl(url); pdfOverlay.setVisibility(View.VISIBLE); }
-    private void copiarADescargas(File src){ try{ File dst = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), src.getName()); FileInputStream in = new FileInputStream(src); FileOutputStream out = new FileOutputStream(dst); byte[] buf = new byte[4096]; int len; while((len = in.read(buf)) > 0) out.write(buf, 0, len); in.close(); out.close(); }catch(Exception e){ e.printStackTrace(); } }
-    private void abrirScanner(){ IntentIntegrator i=new IntentIntegrator(this); i.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE); i.setPrompt("Escanea el QR"); i.setBeepEnabled(true); i.setOrientationLocked(false); i.initiateScan(); }
+
+    private void mostrarLinkEnVisor(String url){
+        pdfFileActual = null;
+        findViewById(R.id.btnPdfMenu).setVisibility(View.GONE);
+        pdfView.loadUrl(url);
+        pdfOverlay.setVisibility(View.VISIBLE);
+    }
+
+    private void copiarADescargas(File src){
+        try{
+            File dst = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), src.getName());
+            FileInputStream in = new FileInputStream(src);
+            FileOutputStream out = new FileOutputStream(dst);
+            byte[] buf = new byte[4096];
+            int len;
+            while((len = in.read(buf)) > 0) out.write(buf, 0, len);
+            in.close();
+            out.close();
+        }catch(Exception e){
+            e.printStackTrace();
+        }
+    }
+
+    private void abrirScanner(){
+        IntentIntegrator i=new IntentIntegrator(this);
+        i.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
+        i.setPrompt("Escanea el QR");
+        i.setBeepEnabled(true);
+        i.setOrientationLocked(false);
+        i.initiateScan();
+    }
+
     @Override public void onBackPressed() {
-        if(recorder!=null){ detenerAudio(); return; }
-        if(pdfOverlay.getVisibility()==View.VISIBLE){ pdfOverlay.setVisibility(View.GONE); pdfView.loadUrl("about:blank"); return; }
+        if(recorder!=null){
+            detenerAudio();
+            return;
+        }
+        if(pdfOverlay.getVisibility()==View.VISIBLE){
+            pdfOverlay.setVisibility(View.GONE);
+            pdfView.loadUrl("about:blank");
+            return;
+        }
         long now = System.currentTimeMillis();
-        if (now - lastBackPress < 600) { webView.clearHistory(); webView.loadUrl(APPSHEET_URL); finishAffinity(); return; }
+        if (now - lastBackPress < 600) {
+            webView.clearHistory();
+            webView.loadUrl(APPSHEET_URL);
+            finishAffinity();
+            return;
+        }
         lastBackPress = now;
-        if (webView.canGoBack()){ webView.goBack(); return; }
+        if (webView.canGoBack()){
+            webView.goBack();
+            return;
+        }
         super.onBackPressed();
     }
+
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data){
         super.onActivityResult(requestCode,resultCode,data);
         IntentResult r=IntentIntegrator.parseActivityResult(requestCode,resultCode,data);
         if(r!=null&&r.getContents()!=null){
-            String qr=r.getContents(); Toast.makeText(this,"QR: "+qr,Toast.LENGTH_SHORT).show();
+            String qr=r.getContents();
+            Toast.makeText(this,"QR: "+qr,Toast.LENGTH_SHORT).show();
             String esc=qr.replace("\\","\\\\").replace("'","\\'").replace("\"","\\\"").replace("\n","\\n");
             String id = lastQrId!=null? lastQrId : "";
             String inject = "javascript:(function(){ var v='"+esc+"'; var el=document.getElementById('"+id+"'); if(!el) el=document.activeElement; if(!el) return; el.focus(); var lastValue = el.value; el.value = v; var tracker = el._valueTracker; if(tracker){ tracker.setValue(lastValue); } el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); })()";
@@ -472,10 +704,29 @@ public class MainActivity extends AppCompatActivity {
             webView.postDelayed(() -> btnQr.setVisibility(View.GONE), 600);
             return;
         }
-        if(requestCode==1001&&filePathCallback!=null){ Uri[] res=null; if(resultCode==RESULT_OK && data!=null && data.getData()!=null) res=new Uri[]{data.getData()}; filePathCallback.onReceiveValue(res); filePathCallback=null; }
-        if(requestCode==1003&&filePathCallback!=null){ Uri[] res=null; if(resultCode==RESULT_OK && cameraImageUri!=null) res=new Uri[]{cameraImageUri}; filePathCallback.onReceiveValue(res); filePathCallback=null; }
+        if(requestCode==1001&&filePathCallback!=null){
+            Uri[] res=null;
+            if(resultCode==RESULT_OK && data!=null && data.getData()!=null) res=new Uri[]{data.getData()};
+            filePathCallback.onReceiveValue(res);
+            filePathCallback=null;
+        }
+        if(requestCode==1003&&filePathCallback!=null){
+            Uri[] res=null;
+            if(resultCode==RESULT_OK && cameraImageUri!=null) res=new Uri[]{cameraImageUri};
+            filePathCallback.onReceiveValue(res);
+            filePathCallback=null;
+        }
         if(requestCode==1004 && resultCode==RESULT_OK && data!=null && data.getData()!=null){
-            try{ Uri uri = data.getData(); InputStream is = getContentResolver().openInputStream(uri); Bitmap bmp = BitmapFactory.decodeStream(is); is.close(); selectedIconBitmap = bmp; if(previewIconView!= null) previewIconView.setImageBitmap(bmp); }catch(Exception e){ Toast.makeText(this, "Error icono: " + e.getMessage(), Toast.LENGTH_SHORT).show(); }
+            try{
+                Uri uri = data.getData();
+                InputStream is = getContentResolver().openInputStream(uri);
+                Bitmap bmp = BitmapFactory.decodeStream(is);
+                is.close();
+                selectedIconBitmap = bmp;
+                if(previewIconView!= null) previewIconView.setImageBitmap(bmp);
+            }catch(Exception e){
+                Toast.makeText(this, "Error icono: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
         }
     }
 }
