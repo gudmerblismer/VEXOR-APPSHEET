@@ -48,32 +48,4 @@
             android:elevation="8dp"/>
     </FrameLayout>
 
-    <LinearLayout
-        android:id="@+id/loginOverlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:padding="24dp"
-        android:background="@drawable/bg_welcome_gradient"
-        android:visibility="gone">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:background="@drawable/bg_card_white"
-            android:padding="24dp"
-            android:elevation="12dp">
-
-            <ImageView android:layout_width="70dp" android:layout_height="70dp" android:src="@mipmap/logo_vexor" android:layout_marginBottom="16dp"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Bienvenido a" android:textSize="26sp" android:textStyle="bold" android:textColor="#1E1740"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Vexor" android:textSize="32sp" android:textStyle="bold" android:textColor="#1E1740" android:layout_marginBottom="12dp"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Pega tu link de AppSheet para comenzar" android:textSize="14sp" android:textColor="#777777" android:layout_marginBottom="20dp"/>
-            <EditText android:id="@+id/inputAppSheet" android:layout_width="match_parent" android:layout_height="52dp" android:background="@drawable/bg_input" android:hint="https://www.appsheet.com/start/..." android:padding="14dp"/>
-            <Button android:id="@+id/btnEntrar" android:layout_width="match_parent" android:layout_height="56dp" android:layout_marginTop="20dp" android:text="ENTRAR" android:textStyle="bold" android:textColor="#FFFFFF" android:background="@drawable/bg_btn_gradient"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="El link de Data Studio se leerá automático desde tu AppSheet" android:textSize="11sp" android:textColor="#999999" android:gravity="center" android:layout_marginTop="14dp"/>
-        </LinearLayout>
-    </LinearLayout>
 </FrameLayout>
