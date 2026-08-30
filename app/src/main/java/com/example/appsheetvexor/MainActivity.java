@@ -84,6 +84,7 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface public void estadoPlan(){ runOnUiThread(() -> mostrarEstadoPlanDialog()); }
         @JavascriptInterface public void activarPro(){ runOnUiThread(() -> mostrarActivarProDialog()); }
         @JavascriptInterface public void comprarLicencia(){ runOnUiThread(() -> { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(PAYPAL_LINK))); }); }
+        @JavascriptInterface public void recargar(){ runOnUiThread(() -> { if(webView!=null) webView.reload(); }); }
     }
 
     @Override
@@ -217,17 +218,44 @@ public class MainActivity extends AppCompatActivity {
 
         webView.loadUrl(APPSHEET_URL);
 
-        // FIX DEFINITIVO PARA PRIMER INGRESO - DOBLE RECARGA (EXPANDIDO)
+        // FIX INTELIGENTE - SE RECARGA SOLO HASTA QUE CARGUE EL MENU COMPLETO
         SharedPreferences firstPrefs = getSharedPreferences("VEXOR_FIRST", MODE_PRIVATE);
-        int count = firstPrefs.getInt("launch_count", 0);
-        if(count < 2){
-            webView.postDelayed(() -> {
-                webView.reload();
-            }, 2500);
-            webView.postDelayed(() -> {
-                webView.reload();
-                firstPrefs.edit().putInt("launch_count", 2).apply();
-            }, 5500);
+        // Si ya esta marcado como cargado, no hace nada
+        if(!firstPrefs.getBoolean("menu_cargado_ok", false)){
+            webView.postDelayed(new Runnable() {
+                int intentos = 0;
+                @Override
+                public void run() {
+                    if(intentos >= 8){
+                        firstPrefs.edit().putBoolean("menu_cargado_ok", true).apply();
+                        return;
+                    }
+                    webView.evaluateJavascript("(function(){ return document.documentElement.innerHTML; })()", htmlValue -> {
+                        try{
+                            String html = htmlValue != null ? htmlValue : "";
+                            // Detecta pantalla vacia como tu foto: tiene MENÚ pero le faltan iconos o textos
+                            boolean tieneMenu = html.contains("MEN\\u00da") || html.contains("MENU");
+                            boolean tieneAdmin = html.contains("ADMINIS") || html.contains("ADMIN");
+                            boolean tieneAjustes = html.contains("AJUSTES");
+                            boolean tieneContab = html.contains("CONTAB");
+                            boolean estaIncompleto = tieneMenu && (!tieneAdmin || !tieneAjustes || !tieneContab || html.length() < 20000);
+
+                            if(estaIncompleto){
+                                intentos++;
+                                webView.reload();
+                                webView.postDelayed(this, 3500);
+                            }else{
+                                // Ya cargo bien, no volver a hacer nunca mas
+                                firstPrefs.edit().putBoolean("menu_cargado_ok", true).apply();
+                            }
+                        }catch(Exception e){
+                            intentos++;
+                            webView.reload();
+                            webView.postDelayed(this, 3500);
+                        }
+                    });
+                }
+            }, 4000);
         }
     }
 
