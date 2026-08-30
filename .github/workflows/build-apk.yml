@@ -3,43 +3,42 @@ on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: 'Nombre de la app'
+        description: 'Nombre app'
         required: true
-        default: 'Mi App'
       appsheet_url:
         description: 'Link AppSheet'
         required: true
-        default: 'https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v3
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Java 17
+        uses: actions/setup-java@v3
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: 17
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Android SDK
+        uses: android-actions/setup-android@v2
 
-      - name: Reemplazar NOMBRE y LINK
+      - name: Fix gradlew
+        run: chmod +x gradlew
+
+      - name: Replace app name and url
         run: |
-          sed -i "s|APP_NAME_PLACEHOLDER|${{ inputs.app_name }}|g" app/src/main/res/values/strings.xml || true
-          sed -i "s|AppSheet Vexor|${{ inputs.app_name }}|g" app/src/main/AndroidManifest.xml || true
-          sed -i "s|https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile|${{ inputs.appsheet_url }}|g" app/src/main/java/com/example/appsheetvexor/MainActivity.java || true
-          sed -i "s|URL_PLACEHOLDER|${{ inputs.appsheet_url }}|g" app/src/main/java/com/example/appsheetvexor/MainActivity.java || true
+          echo "App: ${{ inputs.app_name }}"
+          find app/src -type f -name "*.xml" -o -name "*.java" | xargs sed -i "s|NEXO|${{ inputs.app_name }}|g" || true
+          find app/src -type f -name "*.java" | xargs sed -i "s|https://www.appsheet.com/start/[^ ]*|${{ inputs.appsheet_url }}|g" || true
 
-      - name: Build Debug APK sin cache
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace -Dorg.gradle.caching=false
+      - name: Build APK
+        run: ./gradlew assembleDebug
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Upload
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ inputs.app_name }}-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/*.apk
