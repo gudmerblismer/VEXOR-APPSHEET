@@ -1,147 +1,57 @@
-name: Build APK por cliente (Vexor)
-
-# Se dispara manualmente o vía API (llamado desde Apps Script con un
-# Personal Access Token) pasando los datos del cliente como "inputs".
+name: Build APK VEXOR
 on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: "Nombre de la app (ej: NEXO Ventas Pro)"
+        description: 'Nombre de la app'
         required: true
       appsheet_url:
-        description: "Link de inicio de AppSheet del cliente"
+        description: 'Link AppSheet'
         required: true
-      icon_url:
-        description: "URL pública del icono (PNG 512x512, ej: link de Google Drive en formato descarga directa)"
-        required: true
-      email_cliente:
-        description: "Email del cliente (para el correo de entrega)"
-        required: false
-        default: ""
-      row:
-        description: "Número de fila en la hoja de cálculo (para que Apps Script sepa qué fila actualizar)"
-        required: false
-        default: ""
-
-permissions:
-  contents: write # necesario para crear el Release con el APK
+  # NO se ejecuta con push de iconos
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'app/src/main/res/mipmap-**'
+      - '**.png'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout del código
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configurar JDK 17
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: "17"
+          distribution: 'temurin'
+          java-version: '17'
 
-      - name: Instalar dependencias de Python
-        run: pip install --quiet pillow google-api-python-client google-auth
+      - name: Setup Android
+        uses: android-actions/setup-android@v3
 
-      - name: Inyectar nombre de app y link de AppSheet del cliente
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Reemplazar solo NOMBRE y LINK
         run: |
-          python3 scripts/apply_client_config.py \
-            "${{ github.event.inputs.app_name }}" \
-            "${{ github.event.inputs.appsheet_url }}"
+          echo "App: ${{ inputs.app_name }}"
+          # Si viene de push, usa valores por defecto
+          APP_NAME="${{ inputs.app_name }}"
+          APP_URL="${{ inputs.appsheet_url }}"
+          if [ -z "$APP_NAME" ]; then APP_NAME="NEXO"; fi
+          if [ -z "$APP_URL" ]; then APP_URL="https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile"; fi
 
-      - name: Generar iconos del cliente
-        run: |
-          python3 scripts/generate_icons.py \
-            "${{ github.event.inputs.icon_url }}" \
-            "app/src/main/res"
+          sed -i "s|APP_NAME_PLACEHOLDER|$APP_NAME|g" app/src/main/res/values/strings.xml || true
+          sed -i "s|AppSheet Vexor|$APP_NAME|g" app/src/main/AndroidManifest.xml || true
+          sed -i "s|URL_PLACEHOLDER|$APP_URL|g" app/src/main/java/com/example/appsheetvexor/MainActivity.java || true
+          sed -i "s|https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile|$APP_URL|g" app/src/main/java/com/example/appsheetvexor/MainActivity.java || true
 
-      - name: Preparar sufijo de applicationId (uno por cliente)
-        id: appid
-        run: |
-          SAFE=$(echo "${{ github.event.inputs.app_name }}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/_/g' | sed -E 's/^_+|_+$//g')
-          echo "suffix=cliente_${SAFE}" >> "$GITHUB_OUTPUT"
+      - name: Build APK
+        run: chmod +x gradlew &&./gradlew assembleDebug --stacktrace
 
-      - name: Decodificar keystore de firma
-        if: ${{ secrets.VEXOR_KEYSTORE_BASE64 != '' }}
-        run: |
-          echo "${{ secrets.VEXOR_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
-
-      - name: Dar permisos a gradlew
-        run: chmod +x ./gradlew
-
-      - name: Compilar APK firmado
-        env:
-          VEXOR_KEYSTORE_PATH: ${{ secrets.VEXOR_KEYSTORE_BASE64 != '' && format('{0}/release.keystore', github.workspace) || '' }}
-          VEXOR_KEYSTORE_PASSWORD: ${{ secrets.VEXOR_KEYSTORE_PASSWORD }}
-          VEXOR_KEY_ALIAS: ${{ secrets.VEXOR_KEY_ALIAS }}
-          VEXOR_KEY_PASSWORD: ${{ secrets.VEXOR_KEY_PASSWORD }}
-          VEXOR_APP_ID_SUFFIX: ${{ steps.appid.outputs.suffix }}
-        run: ./gradlew assembleRelease --no-daemon
-
-      - name: Renombrar APK final
-        id: apk
-        run: |
-          SAFE=$(echo "${{ github.event.inputs.app_name }}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/_/g' | sed -E 's/^_+|_+$//g')
-          STAMP=$(date +%Y%m%d_%H%M%S)
-          SRC=$(find app/build/outputs/apk/release -name "*.apk" | head -n1)
-          DEST="vexor_${SAFE}_${STAMP}.apk"
-          cp "$SRC" "$DEST"
-          echo "path=$DEST" >> "$GITHUB_OUTPUT"
-          echo "tag=apk-${SAFE}-${STAMP}" >> "$GITHUB_OUTPUT"
-
-      - name: Subir APK como artifact del workflow
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.apk.outputs.path }}
-          path: ${{ steps.apk.outputs.path }}
-
-      - name: Publicar APK en un GitHub Release
-        id: release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.apk.outputs.tag }}
-          name: "${{ github.event.inputs.app_name }}"
-          files: ${{ steps.apk.outputs.path }}
-          body: "APK generado automáticamente para ${{ github.event.inputs.app_name }}."
-
-      - name: Link de descarga del Release (funciona directo si el repo es público)
-        id: release_link
-        run: |
-          echo "url=https://github.com/${{ github.repository }}/releases/download/${{ steps.apk.outputs.tag }}/${{ steps.apk.outputs.path }}" >> "$GITHUB_OUTPUT"
-
-      - name: Subir APK a Google Drive (opcional, solo si configuraste esos secrets)
-        id: drive
-        if: ${{ secrets.VEXOR_GDRIVE_SA_KEY != '' }}
-        env:
-          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.VEXOR_GDRIVE_SA_KEY }}
-        run: |
-          python3 scripts/upload_to_drive.py \
-            "${{ steps.apk.outputs.path }}" \
-            "${{ steps.apk.outputs.path }}" \
-            "${{ secrets.VEXOR_GDRIVE_FOLDER_ID }}"
-
-      - name: Elegir el link final (Drive si existe, si no el del Release)
-        id: final_link
-        run: |
-          if [ -n "${{ steps.drive.outputs.direct_link }}" ]; then
-            echo "download=${{ steps.drive.outputs.direct_link }}" >> "$GITHUB_OUTPUT"
-            echo "view=${{ steps.drive.outputs.view_link }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "download=${{ steps.release_link.outputs.url }}" >> "$GITHUB_OUTPUT"
-            echo "view=${{ steps.release_link.outputs.url }}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Avisar a Apps Script (actualizar Sheet + enviar email al cliente)
-        if: ${{ secrets.VEXOR_CALLBACK_URL != '' }}
-        run: |
-          curl -s -X POST "${{ secrets.VEXOR_CALLBACK_URL }}" \
-            -H "Content-Type: application/json" \
-            -d @- <<EOF
-          {
-            "action": "apk_listo",
-            "row": "${{ github.event.inputs.row }}",
-            "app_name": "${{ github.event.inputs.app_name }}",
-            "email_cliente": "${{ github.event.inputs.email_cliente }}",
-            "apk_link": "${{ steps.final_link.outputs.download }}",
-            "apk_view_link": "${{ steps.final_link.outputs.view }}"
-          }
-          EOF
+          name: ${{ inputs.app_name }}-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
