@@ -5,11 +5,9 @@ on:
       app_name:
         description: 'Nombre app'
         required: true
-        default: 'NEXO'
       appsheet_url:
         description: 'Link AppSheet'
         required: true
-        default: 'https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile'
 
 jobs:
   build:
@@ -21,15 +19,16 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: android-actions/setup-android@v3
-      - name: Fix duplicate icons
+      - name: Fix duplicate icons + Replace name/url
         run: |
-          echo "Borrando png duplicados..."
-          find app/src/main/res -name "ic_launcher.png" -delete
-          find app/src/main/res -name "logo_vexor.png" -delete
-          find app/src/main/res -name "ic_launcher_round.png" -delete
-          ls app/src/main/res/mipmap-mdpi/
+          find app/src/main/res -name "ic_launcher.png" -delete || true
+          find app/src/main/res -name "logo_vexor.png" -delete || true
+          find app/src/main/res -name "ic_launcher_round.png" -delete || true
+          # Reemplaza nombre y url en MainActivity
+          sed -i "s|https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile|${{ inputs.appsheet_url }}|g" app/src/main/java/com/example/appsheetvexor/MainActivity.java || true
+          sed -i "s|NEXO|${{ inputs.app_name }}|g" app/src/main/res/values/strings.xml || true
       - run: chmod +x ./gradlew
-      - run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - run: ./gradlew assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.app_name }}-APK
