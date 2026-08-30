@@ -5,11 +5,15 @@ on:
       app_name:
         description: 'Nombre de la app'
         required: true
-        default: 'Mi App'
       appsheet_url:
         description: 'Link AppSheet'
         required: true
-        default: 'https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile'
+  # NO se ejecuta con push de iconos
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'app/src/main/res/mipmap-**'
+      - '**.png'
 
 jobs:
   build:
@@ -23,29 +27,31 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK
+      - name: Setup Android
         uses: android-actions/setup-android@v3
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Reemplazar NOMBRE y LINK
+      - name: Reemplazar solo NOMBRE y LINK
         run: |
-          echo "Building ${{ inputs.app_name }}"
-          sed -i "s|APP_NAME_PLACEHOLDER|${{ inputs.app_name }}|g" app/src/main/res/values/strings.xml
-          sed -i "s|AppSheet Vexor|${{ inputs.app_name }}|g" app/src/main/AndroidManifest.xml
-          sed -i "s|URL_PLACEHOLDER|${{ inputs.appsheet_url }}|g" app/src/main/java/com/example/appsheetvexor/MainActivity.java
-          sed -i "s|https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile|${{ inputs.appsheet_url }}|g" app/src/main/java/com/example/appsheetvexor/MainActivity.java
-          echo "OK"
+          echo "App: ${{ inputs.app_name }}"
+          # Si viene de push, usa valores por defecto
+          APP_NAME="${{ inputs.app_name }}"
+          APP_URL="${{ inputs.appsheet_url }}"
+          if [ -z "$APP_NAME" ]; then APP_NAME="NEXO"; fi
+          if [ -z "$APP_URL" ]; then APP_URL="https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile"; fi
 
-      - name: Build Debug APK
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          sed -i "s|APP_NAME_PLACEHOLDER|$APP_NAME|g" app/src/main/res/values/strings.xml || true
+          sed -i "s|AppSheet Vexor|$APP_NAME|g" app/src/main/AndroidManifest.xml || true
+          sed -i "s|URL_PLACEHOLDER|$APP_URL|g" app/src/main/java/com/example/appsheetvexor/MainActivity.java || true
+          sed -i "s|https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile|$APP_URL|g" app/src/main/java/com/example/appsheetvexor/MainActivity.java || true
+
+      - name: Build APK
+        run: chmod +x gradlew &&./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.app_name }}-APK
           path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 5
