@@ -5,25 +5,31 @@ on:
       app_name:
         description: 'Nombre app'
         required: true
+        default: 'NEXO'
       appsheet_url:
         description: 'Link AppSheet'
         required: true
+        default: 'https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
       - uses: android-actions/setup-android@v3
-      - run: chmod +x gradlew
-      - name: Replace
+      - name: Fix duplicate icons
         run: |
-          sed -i "s|https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile|${{ inputs.appsheet_url }}|g" app/src/main/java/com/example/appsheetvexor/MainActivity.java || true
-      - run: ./gradlew assembleDebug --no-daemon
+          echo "Borrando png duplicados..."
+          find app/src/main/res -name "ic_launcher.png" -delete
+          find app/src/main/res -name "logo_vexor.png" -delete
+          find app/src/main/res -name "ic_launcher_round.png" -delete
+          ls app/src/main/res/mipmap-mdpi/
+      - run: chmod +x ./gradlew
+      - run: ./gradlew assembleDebug --no-daemon --stacktrace
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.app_name }}-APK
