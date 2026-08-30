@@ -21,8 +21,8 @@
     <application
         android:hardwareAccelerated="true"
         android:allowBackup="true"
-        android:icon="@mipmap/logo_vexor"
-        android:roundIcon="@mipmap/logo_vexor"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="false"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
