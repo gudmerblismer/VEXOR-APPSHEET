@@ -94,7 +94,8 @@ jobs:
           name: ${{ steps.apk.outputs.path }}
           path: ${{ steps.apk.outputs.path }}
 
-      - name: Publicar APK en un GitHub Release (respaldo interno)
+      - name: Publicar APK en un GitHub Release
+        id: release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.apk.outputs.tag }}
@@ -102,8 +103,14 @@ jobs:
           files: ${{ steps.apk.outputs.path }}
           body: "APK generado automáticamente para ${{ github.event.inputs.app_name }}."
 
-      - name: Subir APK a Google Drive (link público, sin necesidad de cuenta de GitHub)
+      - name: Link de descarga del Release (funciona directo si el repo es público)
+        id: release_link
+        run: |
+          echo "url=https://github.com/${{ github.repository }}/releases/download/${{ steps.apk.outputs.tag }}/${{ steps.apk.outputs.path }}" >> "$GITHUB_OUTPUT"
+
+      - name: Subir APK a Google Drive (opcional, solo si configuraste esos secrets)
         id: drive
+        if: ${{ secrets.VEXOR_GDRIVE_SA_KEY != '' }}
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.VEXOR_GDRIVE_SA_KEY }}
         run: |
@@ -111,6 +118,17 @@ jobs:
             "${{ steps.apk.outputs.path }}" \
             "${{ steps.apk.outputs.path }}" \
             "${{ secrets.VEXOR_GDRIVE_FOLDER_ID }}"
+
+      - name: Elegir el link final (Drive si existe, si no el del Release)
+        id: final_link
+        run: |
+          if [ -n "${{ steps.drive.outputs.direct_link }}" ]; then
+            echo "download=${{ steps.drive.outputs.direct_link }}" >> "$GITHUB_OUTPUT"
+            echo "view=${{ steps.drive.outputs.view_link }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "download=${{ steps.release_link.outputs.url }}" >> "$GITHUB_OUTPUT"
+            echo "view=${{ steps.release_link.outputs.url }}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Avisar a Apps Script (actualizar Sheet + enviar email al cliente)
         if: ${{ secrets.VEXOR_CALLBACK_URL != '' }}
@@ -123,7 +141,7 @@ jobs:
             "row": "${{ github.event.inputs.row }}",
             "app_name": "${{ github.event.inputs.app_name }}",
             "email_cliente": "${{ github.event.inputs.email_cliente }}",
-            "apk_link": "${{ steps.drive.outputs.direct_link }}",
-            "apk_view_link": "${{ steps.drive.outputs.view_link }}"
+            "apk_link": "${{ steps.final_link.outputs.download }}",
+            "apk_view_link": "${{ steps.final_link.outputs.view }}"
           }
           EOF
