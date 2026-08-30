@@ -61,7 +61,7 @@ public class MainActivity extends AppCompatActivity {
     private Bitmap selectedIconBitmap = null;
     private ImageView previewIconView;
     private final String DATASTUDIO_URL = "https://datastudio.google.com/embed/reporting/a9a7f8c7-b820-4b17-9e6b-b6168d82d175/page/jfW6F";
-    // ESTA URL LA REEMPLAZA AUTOMATICAMENTE GITHUB CUANDO EL CLIENTE GENERA DESDE LA WEB
+    // PLANTILLA - ESTO LO REEMPLAZA GITHUB CON LA URL QUE VIENE DE BLOGGER
     private String APPSHEET_URL = "https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile";
     private final String GOOGLE_SHEET_API_URL = "https://script.google.com/macros/s/AKfycbxctlMwBkbUbq5M7yZ_objkvRx_AOmUOoZYz_KM5ItJ0GzGg1jxAhOFIfBas5QCnKKe/exec";
     private final String PAYPAL_LINK = "https://www.paypal.com/ncp/payment/4ADF32MFFTY2N";
@@ -96,7 +96,6 @@ public class MainActivity extends AppCompatActivity {
         pdfOverlay = findViewById(R.id.pdfOverlay);
         pdfView = findViewById(R.id.pdfView);
 
-        // URL viene del build, no de SharedPreferences
         String directUrl = getIntent().getStringExtra("direct_url");
         if(directUrl!= null &&!directUrl.isEmpty()){ APPSHEET_URL = directUrl; }
 
@@ -227,7 +226,7 @@ public class MainActivity extends AppCompatActivity {
                 return false;
             }
         });
-        // CARGA DIRECTA SIN PEDIR URL - YA VIENE DE LA WEB
+        // CARGA DIRECTA DE LA URL QUE VIENE DE BLOGGER - SIN PEDIR AL USUARIO
         webView.loadUrl(APPSHEET_URL);
     }
 
