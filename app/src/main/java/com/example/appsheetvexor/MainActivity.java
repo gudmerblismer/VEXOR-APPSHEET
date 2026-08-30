@@ -51,8 +51,6 @@ public class MainActivity extends AppCompatActivity {
     private WebView webView, pdfView;
     private Button btnQr;
     private FrameLayout pdfOverlay;
-    private LinearLayout loginOverlay;
-    private EditText inputAppSheet;
     private File pdfFileActual = null;
     private ValueCallback<Uri[]> filePathCallback;
     private Uri cameraImageUri;
@@ -63,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
     private Bitmap selectedIconBitmap = null;
     private ImageView previewIconView;
     private final String DATASTUDIO_URL = "https://datastudio.google.com/embed/reporting/a9a7f8c7-b820-4b17-9e6b-b6168d82d175/page/jfW6F";
+    // ESTA URL LA REEMPLAZA AUTOMATICAMENTE GITHUB CUANDO EL CLIENTE GENERA DESDE LA WEB
     private String APPSHEET_URL = "https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile";
     private final String GOOGLE_SHEET_API_URL = "https://script.google.com/macros/s/AKfycbxctlMwBkbUbq5M7yZ_objkvRx_AOmUOoZYz_KM5ItJ0GzGg1jxAhOFIfBas5QCnKKe/exec";
     private final String PAYPAL_LINK = "https://www.paypal.com/ncp/payment/4ADF32MFFTY2N";
@@ -83,7 +82,6 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface public void cerrarPdf(){ runOnUiThread(() -> { if(pdfOverlay.getVisibility()==View.VISIBLE) pdfOverlay.setVisibility(View.GONE); }); }
         @JavascriptInterface public void abrirActivar(){ runOnUiThread(() -> mostrarActivarProDialog()); }
         @JavascriptInterface public void crearAcceso(){ runOnUiThread(() -> mostrarDialogCrearAccesoDirecto()); }
-        @JavascriptInterface public void cambiarUrl(){ runOnUiThread(() -> { SharedPreferences prefs = getSharedPreferences("VEXOR_PREFS", MODE_PRIVATE); inputAppSheet.setText(prefs.getString("appsheet_url","")); loginOverlay.setVisibility(View.VISIBLE); }); }
         @JavascriptInterface public void estadoPlan(){ runOnUiThread(() -> mostrarEstadoPlanDialog()); }
         @JavascriptInterface public void activarPro(){ runOnUiThread(() -> mostrarActivarProDialog()); }
         @JavascriptInterface public void comprarLicencia(){ runOnUiThread(() -> { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(PAYPAL_LINK))); }); }
@@ -97,14 +95,11 @@ public class MainActivity extends AppCompatActivity {
         webView = findViewById(R.id.webview);
         pdfOverlay = findViewById(R.id.pdfOverlay);
         pdfView = findViewById(R.id.pdfView);
-        loginOverlay = findViewById(R.id.loginOverlay);
-        inputAppSheet = findViewById(R.id.inputAppSheet);
-        Button btnEntrar = findViewById(R.id.btnEntrar);
-        SharedPreferences prefs = getSharedPreferences("VEXOR_PREFS", MODE_PRIVATE);
-        String guardada = prefs.getString("appsheet_url", "");
-        if(!guardada.isEmpty()) APPSHEET_URL = guardada;
+
+        // URL viene del build, no de SharedPreferences
         String directUrl = getIntent().getStringExtra("direct_url");
         if(directUrl!= null &&!directUrl.isEmpty()){ APPSHEET_URL = directUrl; }
+
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED)
             requestPermissions(new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, 101);
         initVexorLicensing();
@@ -123,16 +118,6 @@ public class MainActivity extends AppCompatActivity {
         pdfView.setWebViewClient(new WebViewClient(){ @Override public boolean shouldOverrideUrlLoading(WebView view, String url){ view.loadUrl(url); return true; } });
         webView.addJavascriptInterface(new Bridge(), "AndroidQR");
         btnQr.setOnClickListener(v -> abrirScanner());
-        btnEntrar.setOnClickListener(v -> {
-            String t = inputAppSheet.getText().toString().trim();
-            if(t.isEmpty()) return;
-            String urlFinal = t.startsWith("http")? t : "https://www.appsheet.com/start/"+t+"?platform=mobile";
-            if(!urlFinal.contains("platform=mobile")) urlFinal += (urlFinal.contains("?")? "&" : "?") + "platform=mobile";
-            prefs.edit().putString("appsheet_url", urlFinal).apply();
-            APPSHEET_URL = urlFinal;
-            loginOverlay.setVisibility(View.GONE);
-            webView.loadUrl(APPSHEET_URL);
-        });
         TextView btnPdfMenu = findViewById(R.id.btnPdfMenu);
         btnPdfMenu.setOnClickListener(v -> {
             PopupMenu popup = new PopupMenu(MainActivity.this, v);
@@ -207,7 +192,6 @@ public class MainActivity extends AppCompatActivity {
                         + "<button id='btn-comprar' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>💳<br>COMPRAR LICENCIA</button>"
                         + "<button id='btn-acceso' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>⭐<br>CREAR ACCESO DIRECTO</button>"
                         + "</div>"
-                        + "<button id='btn-url' style='width:100%;margin-top:8px;padding:10px;border:none;border-radius:10px;background:#f6f6fa;color:#26263a;font-weight:600;font-size:12px;'>🔗 CAMBIAR URL</button>"
                         + "`;"
                         + " if(target===document.body){ document.body.insertBefore(panel, document.body.firstChild); } else { target.insertBefore(panel, target.firstChild); }"
                         + " setTimeout(function(){"
@@ -215,7 +199,6 @@ public class MainActivity extends AppCompatActivity {
                         + " var b2=document.getElementById('btn-activar'); if(b2) b2.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.activarPro(); });"
                         + " var b3=document.getElementById('btn-comprar'); if(b3) b3.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.comprarLicencia(); });"
                         + " var b4=document.getElementById('btn-acceso'); if(b4) b4.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.crearAcceso(); });"
-                        + " var b5=document.getElementById('btn-url'); if(b5) b5.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.cambiarUrl(); });"
                         + " }, 300);"
                         + "}"
                         + "var currentQrField = null;"
@@ -244,7 +227,8 @@ public class MainActivity extends AppCompatActivity {
                 return false;
             }
         });
-        if(guardada.isEmpty() && directUrl == null){ loginOverlay.setVisibility(View.VISIBLE); } else { webView.loadUrl(APPSHEET_URL); }
+        // CARGA DIRECTA SIN PEDIR URL - YA VIENE DE LA WEB
+        webView.loadUrl(APPSHEET_URL);
     }
 
     private void initVexorLicensing(){
@@ -456,7 +440,6 @@ public class MainActivity extends AppCompatActivity {
     private void copiarADescargas(File src){ try{ File dst = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), src.getName()); FileInputStream in = new FileInputStream(src); FileOutputStream out = new FileOutputStream(dst); byte[] buf = new byte[4096]; int len; while((len = in.read(buf)) > 0) out.write(buf, 0, len); in.close(); out.close(); }catch(Exception e){ e.printStackTrace(); } }
     private void abrirScanner(){ IntentIntegrator i=new IntentIntegrator(this); i.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE); i.setPrompt("Escanea el QR"); i.setBeepEnabled(true); i.setOrientationLocked(false); i.initiateScan(); }
     @Override public void onBackPressed() {
-        if(loginOverlay.getVisibility()==View.VISIBLE) return;
         if(recorder!=null){ detenerAudio(); return; }
         if(pdfOverlay.getVisibility()==View.VISIBLE){ pdfOverlay.setVisibility(View.GONE); pdfView.loadUrl("about:blank"); return; }
         long now = System.currentTimeMillis();
