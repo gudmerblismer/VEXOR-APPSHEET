@@ -84,6 +84,19 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface public void estadoPlan(){ runOnUiThread(() -> mostrarEstadoPlanDialog()); }
         @JavascriptInterface public void activarPro(){ runOnUiThread(() -> mostrarActivarProDialog()); }
         @JavascriptInterface public void comprarLicencia(){ runOnUiThread(() -> { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(PAYPAL_LINK))); }); }
+        // REINICIO EN CUALQUIER VISTA
+        @JavascriptInterface public void reiniciarEnCualquierVista(){
+            runOnUiThread(() -> {
+                SharedPreferences p = getSharedPreferences("VEXOR_FIRST", MODE_PRIVATE);
+                if(!p.getBoolean("reiniciado", false)){
+                    p.edit().putBoolean("reiniciado", true).apply();
+                    Intent i = new Intent(MainActivity.this, MainActivity.class);
+                    i.putExtra("direct_url", APPSHEET_URL);
+                    finish();
+                    startActivity(i);
+                }
+            });
+        }
     }
 
     @Override
@@ -174,20 +187,7 @@ public class MainActivity extends AppCompatActivity {
                         + "function getLabel(el){ var t=''; var p=el; for(var i=0;i<10&&p;i++){ t+=(p.innerText||'')+' '+(p.textContent||'')+' '; p=p.parentElement; } return toAscii(t).toUpperCase(); }"
                         + "function getViewName(){ try{ var h=location.hash.replace(/^#/,''); var sp=new URLSearchParams(h); var v=sp.get('view')||sp.get('viewName')||''; if(v) return v.toUpperCase(); }catch(e){} return ''; }"
                         + "function embeber(){ var l=document.querySelector('a[href*=\"datastudio\"],a[href*=\"lookerstudio\"]'); if(l&&l.dataset.embed!='1'){ l.dataset.embed='1'; var c=l; for(var i=0;i<8&&c.parentElement;i++) c=c.parentElement; c.style.cssText='margin:0;padding:0;border:0;width:100%;height:calc(100vh - 56px);overflow:hidden;'; c.innerHTML='<div style=\"width:100%;height:100%;overflow:hidden;\"><iframe src=\"" + DATASTUDIO_URL + "\" style=\"width:100%;height:calc(100% + 20px);border:0;\"></iframe></div>'; } }"
-                        + "function inyectarPanelLicencias(){"
-                        + " var viewName=getViewName();"
-                        + " var hrefUpper=location.href.toUpperCase()+' '+viewName;"
-                        + " var esLicencias = hrefUpper.includes('LICENCIAS') || hrefUpper.includes('LICENSES') || hrefUpper.includes('ESTADO%20PLAN') || hrefUpper.includes('ESTADO_PLAN');"
-                        + " var existing=document.getElementById('vexor-license-panel');"
-                        + " if(!esLicencias){ if(existing) existing.remove(); return; }"
-                        + " if(existing) return;"
-                        + " var target=document.querySelector('[data-testid=\"dashboard-view-container\"]') || document.querySelector('.dashboard-view') || document.body;"
-                        + " var panel=document.createElement('div');"
-                        + " panel.id='vexor-license-panel';"
-                        + " panel.style.cssText='margin:12px;padding:16px;background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);border:1px solid #e6e6ef;font-family:sans-serif;';"
-                        + " panel.innerHTML=`<div style='text-align:center;margin-bottom:12px;'><div style='font-size:28px;'>📊</div><div style='font-weight:800;color:#8f6bc0;'>GESTIÓN DE LICENCIAS</div><div style='color:#85859c;font-size:11px;'>Administra tu app Vexor</div></div><div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;'><button id='btn-estado' style='padding:12px 8px;border:none;border-radius:10px;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;font-weight:700;font-size:12px;'>📊<br>ESTADO DE PLAN</button><button id='btn-activar' style='padding:12px 8px;border:none;border-radius:10px;background:#26263a;color:#fff;font-weight:700;font-size:12px;'>🔑<br>ACTIVAR PRO</button><button id='btn-comprar' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>💳<br>COMPRAR LICENCIA</button><button id='btn-acceso' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>⭐<br>CREAR ACCESO DIRECTO</button></div>`;"
-                        + " if(target===document.body){ document.body.insertBefore(panel, document.body.firstChild); } else { target.insertBefore(panel, target.firstChild); }"
-                        + " setTimeout(function(){ var b1=document.getElementById('btn-estado'); if(b1) b1.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.estadoPlan(); }); var b2=document.getElementById('btn-activar'); if(b2) b2.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.activarPro(); }); var b3=document.getElementById('btn-comprar'); if(b3) b3.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.comprarLicencia(); }); var b4=document.getElementById('btn-acceso'); if(b4) b4.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.crearAcceso(); }); }, 300);}"
+                        + "function inyectarPanelLicencias(){ var viewName=getViewName(); var hrefUpper=location.href.toUpperCase()+' '+viewName; var esLicencias = hrefUpper.includes('LICENCIAS') || hrefUpper.includes('LICENSES') || hrefUpper.includes('ESTADO%20PLAN') || hrefUpper.includes('ESTADO_PLAN'); var existing=document.getElementById('vexor-license-panel'); if(!esLicencias){ if(existing) existing.remove(); return; } if(existing) return; var target=document.querySelector('[data-testid=\"dashboard-view-container\"]') || document.querySelector('.dashboard-view') || document.body; var panel=document.createElement('div'); panel.id='vexor-license-panel'; panel.style.cssText='margin:12px;padding:16px;background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);border:1px solid #e6e6ef;font-family:sans-serif;'; panel.innerHTML=`<div style='text-align:center;margin-bottom:12px;'><div style='font-size:28px;'>📊</div><div style='font-weight:800;color:#8f6bc0;'>GESTIÓN DE LICENCIAS</div><div style='color:#85859c;font-size:11px;'>Administra tu app Vexor</div></div><div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;'><button id='btn-estado' style='padding:12px 8px;border:none;border-radius:10px;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;font-weight:700;font-size:12px;'>📊<br>ESTADO DE PLAN</button><button id='btn-activar' style='padding:12px 8px;border:none;border-radius:10px;background:#26263a;color:#fff;font-weight:700;font-size:12px;'>🔑<br>ACTIVAR PRO</button><button id='btn-comprar' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>💳<br>COMPRAR LICENCIA</button><button id='btn-acceso' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>⭐<br>CREAR ACCESO DIRECTO</button></div>`; if(target===document.body){ document.body.insertBefore(panel, document.body.firstChild); } else { target.insertBefore(panel, target.firstChild); } setTimeout(function(){ var b1=document.getElementById('btn-estado'); if(b1) b1.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.estadoPlan(); }); var b2=document.getElementById('btn-activar'); if(b2) b2.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.activarPro(); }); var b3=document.getElementById('btn-comprar'); if(b3) b3.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.comprarLicencia(); }); var b4=document.getElementById('btn-acceso'); if(b4) b4.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.crearAcceso(); }); }, 300);}"
                         + "var currentQrField = null;"
                         + "document.addEventListener('focusin',function(e){ var el=e.target; if(el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA') return; var label=getLabel(el); if(label.indexOf('QR')==-1){ if(currentQrField!==el){ try{window.AndroidQR.hideBtn();}catch(e){} currentQrField=null; } return; } currentQrField=el; if(!el.id) el.id='qr_'+Date.now(); try{window.AndroidQR.setId(el.id);}catch(e){} if(el.value.trim()==''){ try{window.AndroidQR.showBtn();}catch(e){} } else { try{window.AndroidQR.hideBtn();}catch(e){} } });"
                         + "document.addEventListener('focusout',function(e){ var el=e.target; if(el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA') return; setTimeout(function(){ var active=document.activeElement; var stillQr=false; if(active){ var label=getLabel(active); if(label.indexOf('QR')!=-1) stillQr=true; } if(!stillQr){ try{window.AndroidQR.hideBtn();}catch(err){} currentQrField=null; } },200); });"
@@ -195,7 +195,9 @@ public class MainActivity extends AppCompatActivity {
                         + "document.addEventListener('click', function(e){ var el=e.target; for(var i=0;i<5 && el; i++){ if(el.innerText==='MENÚ' || (el.innerText||'').toUpperCase().indexOf('MENÚ')!=-1){ try{window.AndroidQR.cerrarPdf();}catch(err){} break; } if(el.getAttribute && el.getAttribute('aria-label') && el.getAttribute('aria-label').toLowerCase().indexOf('back')!=-1){ try{window.AndroidQR.cerrarPdf();}catch(err){} break; } el=el.parentElement; } }, true);"
                         + "window.addEventListener('popstate', function(){ try{window.AndroidQR.cerrarPdf();}catch(e){} });"
                         + "(function(){ var _push=history.pushState; history.pushState=function(){ try{window.AndroidQR.cerrarPdf();}catch(e){} return _push.apply(this, arguments); }; var _replace=history.replaceState; history.replaceState=function(){ try{window.AndroidQR.cerrarPdf();}catch(e){} return _replace.apply(this, arguments); }; })();"
-                        + "setInterval(function(){ embeber(); inyectarPanelLicencias(); },1000); embeber(); inyectarPanelLicencias();"
+                        // REINICIO EN CUALQUIER VISTA DESPUES DE LOGIN
+                        + "function checkReinicio(){ try{ var esAppSheet = location.href.includes('appsheet.com/start'); var yaCargo = document.body.innerHTML.length > 4000; if(esAppSheet && yaCargo){ window.AndroidQR.reiniciarEnCualquierVista(); } }catch(e){} }"
+                        + "setInterval(function(){ embeber(); inyectarPanelLicencias(); checkReinicio(); },2000); embeber(); inyectarPanelLicencias();"
                         + "})()";
                 view.evaluateJavascript(js,null);
             }
@@ -216,20 +218,6 @@ public class MainActivity extends AppCompatActivity {
         });
 
         webView.loadUrl(APPSHEET_URL);
-
-        // FIX REAL DEFINITIVO - REINICIO AUTOMATICO LA PRIMERA VEZ
-        // Esto simula exactamente lo que haces manual: salir y volver a entrar
-        SharedPreferences firstPrefs = getSharedPreferences("VEXOR_FIRST", MODE_PRIVATE);
-        boolean yaReiniciado = firstPrefs.getBoolean("reiniciado", false);
-        if(!yaReiniciado){
-            webView.postDelayed(() -> {
-                firstPrefs.edit().putBoolean("reiniciado", true).apply();
-                Intent intent = new Intent(MainActivity.this, MainActivity.class);
-                intent.putExtra("direct_url", APPSHEET_URL);
-                finish();
-                startActivity(intent);
-            }, 4000);
-        }
     }
 
     private void initVexorLicensing(){
