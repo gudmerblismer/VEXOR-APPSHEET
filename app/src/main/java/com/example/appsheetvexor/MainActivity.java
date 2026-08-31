@@ -61,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
     private Bitmap selectedIconBitmap = null;
     private ImageView previewIconView;
     private final String DATASTUDIO_URL = "https://datastudio.google.com/embed/reporting/a9a7f8c7-b820-4b17-9e6b-b6168d82d175/page/jfW6F";
+    // PLANTILLA - ESTO LO REEMPLAZA GITHUB CON LA URL QUE VIENE DE BLOGGER
     private String APPSHEET_URL = "https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile";
     private final String GOOGLE_SHEET_API_URL = "https://script.google.com/macros/s/AKfycbxctlMwBkbUbq5M7yZ_objkvRx_AOmUOoZYz_KM5ItJ0GzGg1jxAhOFIfBas5QCnKKe/exec";
     private final String PAYPAL_LINK = "https://www.paypal.com/ncp/payment/4ADF32MFFTY2N";
@@ -94,22 +95,18 @@ public class MainActivity extends AppCompatActivity {
         webView = findViewById(R.id.webview);
         pdfOverlay = findViewById(R.id.pdfOverlay);
         pdfView = findViewById(R.id.pdfView);
+
         String directUrl = getIntent().getStringExtra("direct_url");
         if(directUrl!= null &&!directUrl.isEmpty()){ APPSHEET_URL = directUrl; }
+
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED)
             requestPermissions(new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, 101);
         initVexorLicensing();
         WebSettings s = webView.getSettings();
-        s.setJavaScriptEnabled(true);
-        s.setDomStorageEnabled(true);
-        s.setDatabaseEnabled(true);
-        s.setAllowFileAccess(true);
-        s.setAllowContentAccess(true);
-        s.setAllowFileAccessFromFileURLs(true);
-        s.setAllowUniversalAccessFromFileURLs(true);
-        s.setMediaPlaybackRequiresUserGesture(false);
-        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        s.setJavaScriptEnabled(true); s.setDomStorageEnabled(true); s.setDatabaseEnabled(true);
+        s.setAllowFileAccess(true); s.setAllowContentAccess(true); s.setAllowFileAccessFromFileURLs(true); s.setAllowUniversalAccessFromFileURLs(true);
+        s.setMediaPlaybackRequiresUserGesture(false); s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        s.setCacheMode(WebSettings.LOAD_NO_CACHE);
         WebSettings ps = pdfView.getSettings();
         ps.setJavaScriptEnabled(true); ps.setAllowFileAccess(true); ps.setAllowUniversalAccessFromFileURLs(true);
         ps.setDomStorageEnabled(true); ps.setBuiltInZoomControls(true); ps.setDisplayZoomControls(false);
@@ -169,6 +166,7 @@ public class MainActivity extends AppCompatActivity {
                     view.evaluateJavascript("javascript:(function(){ try{ var els=document.querySelectorAll('a[href*=\"datastudio\"],a[href*=\"lookerstudio\"]'); if(els.length>0){ var c=els[0]; for(var i=0;i<8&&c.parentElement;i++) c=c.parentElement; c.innerHTML='<div style=\"padding:24px;text-align:center;font-family:sans-serif;\"><h3>❌ Prueba terminada</h3><p>Compra licencia de por vida.<br><b>💳 Pago único</b></p><a href=\""+PAYPAL_LINK+"\" target=\"_blank\" style=\"display:inline-block;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700;margin-top:10px;\">💳 COMPRAR LICENCIA</a><br><br><button onclick=\"window.AndroidQR.abrirActivar()\" style=\"padding:8px 14px;\">🔑 ACTIVAR PRO</button></div>'; } }catch(e){} })()", null);
                 }
                 view.evaluateJavascript("javascript:(function(){ try{ var all=document.body.innerHTML; if(all.includes('Volver a enviar')){ document.body.innerHTML = all.replace(/Volver a enviar/g,''); } }catch(e){} })()", null);
+
                 String js="javascript:(function(){"
                         + "function toAscii(s){ var out=''; for(var i=0;i<s.length;i++){ var cp=s.codePointAt(i); if(cp>65535){i++;} if(cp>=0x1D400&&cp<=0x1D419) out+=String.fromCharCode(cp-0x1D400+65); else if(cp>=0x1D41A&&cp<=0x1D433) out+=String.fromCharCode(cp-0x1D41A+97); else if(cp>=0x1D5D4&&cp<=0x1D5ED) out+=String.fromCharCode(cp-0x1D5D4+65); else if(cp>=0x1D5EE&&cp<=0x1D607) out+=String.fromCharCode(cp-0x1D5EE+97); else if(cp>=0x1D670&&cp<=0x1D689) out+=String.fromCharCode(cp-0x1D670+65); else if(cp>=0x1D68A&&cp<=0x1D6A3) out+=String.fromCharCode(cp-0x1D68A+97); else if(cp>=0x1D7CE&&cp<=0x1D7D7) out+=String.fromCharCode(cp-0x1D7CE+48); else out+=s[i]; } return out; }"
                         + "function getLabel(el){ var t=''; var p=el; for(var i=0;i<10&&p;i++){ t+=(p.innerText||'')+' '+(p.textContent||'')+' '; p=p.parentElement; } return toAscii(t).toUpperCase(); }"
@@ -228,19 +226,8 @@ public class MainActivity extends AppCompatActivity {
                 return false;
             }
         });
-
-        // CARGA CON FIX PARA PRIMER INGRESO
+        // CARGA DIRECTA DE LA URL QUE VIENE DE BLOGGER - SIN PEDIR AL USUARIO
         webView.loadUrl(APPSHEET_URL);
-
-        // FIX: AppSheet necesita crear IndexedDB la primera vez, por eso no funciona hasta el segundo ingreso
-        // Este reload automático solo se ejecuta una vez en la vida de la app
-        SharedPreferences firstPrefs = getSharedPreferences("VEXOR_FIRST", MODE_PRIVATE);
-        if(firstPrefs.getBoolean("primera_vez", true)){
-            webView.postDelayed(() -> {
-                webView.reload();
-                firstPrefs.edit().putBoolean("primera_vez", false).apply();
-            }, 2500);
-        }
     }
 
     private void initVexorLicensing(){
