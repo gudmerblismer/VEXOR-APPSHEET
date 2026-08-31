@@ -113,7 +113,7 @@ public class MainActivity extends AppCompatActivity {
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
         s.setUserAgentString("Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
         s.setSupportMultipleWindows(true);
-        
+
         WebSettings ps = pdfView.getSettings();
         ps.setJavaScriptEnabled(true); ps.setAllowFileAccess(true); ps.setAllowUniversalAccessFromFileURLs(true);
         ps.setDomStorageEnabled(true); ps.setBuiltInZoomControls(true); ps.setDisplayZoomControls(false);
@@ -191,13 +191,30 @@ public class MainActivity extends AppCompatActivity {
                 view.evaluateJavascript(js,null);
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, String url){
-                // FIX: GOOGLE LOGIN SIEMPRE PERMITIDO - ARREGLA PANTALLA BLANCA PRIMERA VEZ
-                if(url.contains("accounts.google.com") || url.contains("gstatic.com") || url.contains("googleusercontent.com") || url.contains("oauth") || url.contains("ServiceLogin") || url.contains("signin")){
+                // ===== FIX GOOGLE LOGIN =====
+                // Solo dominios/rutas que son GENUINAMENTE parte del flujo de login/OAuth.
+                // IMPORTANTE: googleusercontent.com y gstatic.com de "recursos" quedaron
+                // fuera de aquí a propósito, porque AppSheet sirve archivos/PDFs desde
+                // googleusercontent.com y ese era el bug que rompía la vista de PDF/URL.
+                if(url.contains("accounts.google.com") ||
+                   url.contains("accounts.youtube.com") ||
+                   url.contains("oauth2") ||
+                   url.contains("ServiceLogin") ||
+                   url.contains("signin/oauth") ||
+                   url.contains("signin/v2") ||
+                   url.contains("CheckCookie") ||
+                   url.contains("gstatic.com")){
                     return false;
                 }
 
-                // PDF CON LICENCIA - GRATIS 30 DIAS, LUEGO PIDE LICENCIA
-                if(url.contains("gettablefileurl") || url.contains("getfile") || url.toLowerCase().contains(".pdf")){
+                // ===== PDF / ARCHIVO CON LICENCIA - GRATIS 30 DIAS, LUEGO PIDE LICENCIA =====
+                // Se agregó googleusercontent.com y storage.googleapis.com porque muchos
+                // links de adjuntos de AppSheet no contienen ".pdf" literal en la URL.
+                if(url.contains("gettablefileurl") ||
+                   url.contains("getfile") ||
+                   url.toLowerCase().contains(".pdf") ||
+                   url.contains("googleusercontent.com") ||
+                   url.contains("storage.googleapis.com")){
                     if(!hasAccess()){
                         mostrarBloqueoPorExpiracion();
                         return true;
@@ -205,9 +222,9 @@ public class MainActivity extends AppCompatActivity {
                     descargarPdfDeAppSheet(url);
                     return true;
                 }
-                
-                // URL EXTERNA CON LICENCIA - GRATIS 30 DIAS, LUEGO PIDE LICENCIA
-                if(!url.contains("appsheet.com") && !url.contains("google.com") && !url.contains("gstatic.com") && !url.contains("googleusercontent.com")){
+
+                // ===== URL EXTERNA CON LICENCIA - GRATIS 30 DIAS, LUEGO PIDE LICENCIA =====
+                if(!url.contains("appsheet.com") && !url.contains("google.com")){
                     if(url.startsWith("http") && !url.contains("datastudio.google.com") && !url.contains("lookerstudio.google.com")){
                         if(!hasAccess()){
                             mostrarBloqueoPorExpiracion();
@@ -216,12 +233,13 @@ public class MainActivity extends AppCompatActivity {
                         mostrarLinkEnVisor(url);
                         return true;
                     }
-                    // DATA STUDIO TAMBIEN CON LICENCIA
-                    if(url.contains("datastudio.google.com") || url.contains("lookerstudio.google.com")){
-                        if(!hasAccess()){
-                            mostrarBloqueoPorExpiracion();
-                            return true;
-                        }
+                }
+
+                // ===== DATA STUDIO TAMBIEN CON LICENCIA =====
+                if(url.contains("datastudio.google.com") || url.contains("lookerstudio.google.com")){
+                    if(!hasAccess()){
+                        mostrarBloqueoPorExpiracion();
+                        return true;
                     }
                 }
 
