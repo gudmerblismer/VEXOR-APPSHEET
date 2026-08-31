@@ -36,34 +36,34 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Procesar datos - ID UNICO POR APP
+      - name: Procesar datos - ID UNICO POR APP + URL
         run: |
           APP_NAME="${{ github.event.inputs.appName || github.event.client_payload.appName || 'NEXO' }}"
           APP_URL="${{ github.event.inputs.appUrl || github.event.client_payload.appUrl }}"
           ICON_B64="${{ github.event.inputs.iconBase64 || github.event.client_payload.iconBase64 }}"
           
-          # Crear ID unico basado en el nombre: com.vexor.nexotienda, com.vexor.mitienda
-          SANITIZED=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '_' | sed 's/^_*//;s/_*$//' | cut -c1-20)
-          if [ -z "$SANITIZED" ]; then SANITIZED="app${{ github.run_number }}"; fi
-          APP_ID="com.vexor.$SANITIZED"
+          # Hash corto de la URL para diferenciar apps con mismo nombre pero diferente URL
+          URL_HASH=$(echo -n "$APP_URL" | md5sum | cut -c1-6)
+          SANITIZED=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '_' | sed 's/^_*//;s/_*$//' | cut -c1-15)
+          if [ -z "$SANITIZED" ]; then SANITIZED="app"; fi
+          APP_ID="com.vexor.${SANITIZED}_${URL_HASH}"
           
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           echo "APP_URL=$APP_URL" >> $GITHUB_ENV
           echo "APP_ID=$APP_ID" >> $GITHUB_ENV
-          echo "Generando APP_ID: $APP_ID para APP: $APP_NAME"
+          echo "URL_HASH=$URL_HASH" >> $GITHUB_ENV
+          echo "Generando APP_ID: $APP_ID para APP: $APP_NAME con URL: $APP_URL"
 
           if [ -f "app/src/main/res/values/strings.xml" ]; then
             sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$APP_NAME</string>|g" app/src/main/res/values/strings.xml
           fi
 
-          # Cambiar applicationId para que se instalen varias APKs diferentes
           if [ -f "app/build.gradle" ]; then
             sed -i "s/applicationId \".*\"/applicationId \"$APP_ID\"/g" app/build.gradle
             sed -i "s/applicationId '.*'/applicationId \"$APP_ID\"/g" app/build.gradle
           fi
           if [ -f "app/build.gradle.kts" ]; then
             sed -i "s/applicationId = \".*\"/applicationId = \"$APP_ID\"/g" app/build.gradle.kts
-            sed -i "s/applicationId(\" .*\")/applicationId(\"$APP_ID\")/g" app/build.gradle.kts
           fi
 
           if [ ! -z "$ICON_B64" ]; then
@@ -90,9 +90,8 @@ jobs:
       - name: Renombrar APK
         run: |
           APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
-          FINAL_NAME="${{ env.APP_NAME }}-VEXOR-${{ env.APP_ID }}-${{ github.run_number }}.apk"
-          # Limpiar nombre de caracteres raros
-          FINAL_NAME=$(echo "$FINAL_NAME" | tr -cs 'a-zA-Z0-9._-' '_')
+          FINAL_NAME="${{ env.APP_NAME }}-${{ env.URL_HASH }}-VEXOR-${{ github.run_number }}.apk"
+          FINAL_NAME=$(echo "$FINAL_NAME" | tr -cs 'a-zA-Z0-9._-' '_' )
           cp "$APK" "$FINAL_NAME"
           echo "APK_FILE=$FINAL_NAME" >> $GITHUB_ENV
 
@@ -105,8 +104,9 @@ jobs:
             App: ${{ env.APP_NAME }}
             Package: ${{ env.APP_ID }}
             URL: ${{ env.APP_URL }}
+            Hash URL: ${{ env.URL_HASH }}
             Build: ${{ github.run_number }}
-            Generado por VEXOR Builder - Instalacion multiple habilitada
+            Ahora soporta mismo nombre con diferente URL sin choque
           files: ${{ env.APK_FILE }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -114,6 +114,6 @@ jobs:
       - name: Subir Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APP_NAME }}-APK-${{ github.run_number }}
+          name: ${{ env.APP_NAME }}-${{ env.URL_HASH }}-APK-${{ github.run_number }}
           path: ${{ env.APK_FILE }}
           retention-days: 30
