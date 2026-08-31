@@ -73,6 +73,7 @@ public class MainActivity extends AppCompatActivity {
     private String deviceId = "";
     private int licenseMax = 1;
     private int licenseUsed = 1;
+    private boolean primerIngresoCompletado = false; // FIX PARA NO BLOQUEAR LOGIN
 
     public class Bridge {
         @JavascriptInterface public void setId(String id){ lastQrId = id; }
@@ -84,19 +85,7 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface public void estadoPlan(){ runOnUiThread(() -> mostrarEstadoPlanDialog()); }
         @JavascriptInterface public void activarPro(){ runOnUiThread(() -> mostrarActivarProDialog()); }
         @JavascriptInterface public void comprarLicencia(){ runOnUiThread(() -> { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(PAYPAL_LINK))); }); }
-        @JavascriptInterface public void reiniciarEnCualquierVista(){
-            // DESACTIVADO - ESTO CAUSABA PANTALLA BLANCA
-            // runOnUiThread(() -> {
-            //     SharedPreferences p = getSharedPreferences("VEXOR_FIRST", MODE_PRIVATE);
-            //     if(!p.getBoolean("reiniciado", false)){
-            //         p.edit().putBoolean("reiniciado", true).apply();
-            //         Intent i = new Intent(MainActivity.this, MainActivity.class);
-            //         i.putExtra("direct_url", APPSHEET_URL);
-            //         finish();
-            //         startActivity(i);
-            //     }
-            // });
-        }
+        @JavascriptInterface public void reiniciarEnCualquierVista(){ /* DESACTIVADO */ }
     }
 
     @Override
@@ -123,7 +112,6 @@ public class MainActivity extends AppCompatActivity {
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        // FIX 1: USER AGENT PARA QUE APPSHEET NO SE QUEDE BLANCO
         s.setUserAgentString("Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
         s.setSupportMultipleWindows(true);
         
@@ -182,6 +170,11 @@ public class MainActivity extends AppCompatActivity {
         });
         webView.setWebViewClient(new WebViewClient(){
             @Override public void onPageFinished(WebView view, String url){
+                // FIX: Marcar que ya paso el primer ingreso a AppSheet, ahora si activar PDF/URL
+                if(url.contains("appsheet.com/start") && !primerIngresoCompletado){
+                    // Esperamos 3 segundos después de entrar a AppSheet para activar funciones PDF
+                    view.postDelayed(() -> primerIngresoCompletado = true, 3000);
+                }
                 if(!hasAccess()){
                     view.evaluateJavascript("javascript:(function(){ try{ var els=document.querySelectorAll('a[href*=\"datastudio\"],a[href*=\"lookerstudio\"]'); if(els.length>0){ var c=els[0]; for(var i=0;i<8&&c.parentElement;i++) c=c.parentElement; c.innerHTML='<div style=\"padding:24px;text-align:center;font-family:sans-serif;\"><h3>❌ Prueba terminada</h3><p>Compra licencia de por vida.<br><b>💳 Pago único</b></p><a href=\""+PAYPAL_LINK+"\" target=\"_blank\" style=\"display:inline-block;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700;margin-top:10px;\">💳 COMPRAR LICENCIA</a><br><br><button onclick=\"window.AndroidQR.abrirActivar()\" style=\"padding:8px 14px;\">🔑 ACTIVAR PRO</button></div>'; } }catch(e){} })()", null);
                 }
@@ -199,14 +192,13 @@ public class MainActivity extends AppCompatActivity {
                         + "document.addEventListener('click', function(e){ var el=e.target; for(var i=0;i<5 && el; i++){ if(el.innerText==='MENÚ' || (el.innerText||'').toUpperCase().indexOf('MENÚ')!=-1){ try{window.AndroidQR.cerrarPdf();}catch(err){} break; } if(el.getAttribute && el.getAttribute('aria-label') && el.getAttribute('aria-label').toLowerCase().indexOf('back')!=-1){ try{window.AndroidQR.cerrarPdf();}catch(err){} break; } el=el.parentElement; } }, true);"
                         + "window.addEventListener('popstate', function(){ try{window.AndroidQR.cerrarPdf();}catch(e){} });"
                         + "(function(){ var _push=history.pushState; history.pushState=function(){ try{window.AndroidQR.cerrarPdf();}catch(e){} return _push.apply(this, arguments); }; var _replace=history.replaceState; history.replaceState=function(){ try{window.AndroidQR.cerrarPdf();}catch(e){} return _replace.apply(this, arguments); }; })();"
-                        // FIX 2: REINICIO DESACTIVADO
-                        + "function checkReinicio(){ /* DESACTIVADO PARA EVITAR BLANCO */ }"
+                        + "function checkReinicio(){ }"
                         + "setInterval(function(){ embeber(); inyectarPanelLicencias(); },2000); embeber(); inyectarPanelLicencias();"
                         + "})()";
                 view.evaluateJavascript(js,null);
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, String url){
-                // FIX 3: ESTO ARREGLA TU FOTO - PERMITIR LOGIN GOOGLE
+                // 1. SIEMPRE PERMITIR LOGIN GOOGLE - NUNCA BLOQUEAR
                 if(url.contains("accounts.google.com") || 
                    url.contains("accounts.youtube.com") ||
                    url.contains("google.com/signin") ||
@@ -214,15 +206,25 @@ public class MainActivity extends AppCompatActivity {
                    url.contains("gstatic.com") ||
                    url.contains("googleusercontent.com") ||
                    url.contains("google.com/o/oauth") ||
-                   url.contains("ServiceLogin")){
-                    return false; // Dejar que cargue en el mismo webView
+                   url.contains("ServiceLogin") ||
+                   url.contains("signin/v2") ||
+                   url.contains("CheckCookie")){
+                    return false;
                 }
+                
+                // 2. Si aun no completo primer ingreso, no bloquear nada de appsheet
+                if(!primerIngresoCompletado && url.contains("appsheet.com")){
+                    if(pdfOverlay.getVisibility()==View.VISIBLE){ pdfOverlay.setVisibility(View.GONE); }
+                    return false;
+                }
+
+                // 3. AHORA SI - PDF Y URL FUNCIONANDO DESPUES DEL LOGIN
                 if(url.contains("gettablefileurl") || url.contains("getfile") || url.toLowerCase().contains(".pdf")){
                     if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
                     descargarPdfDeAppSheet(url); return true;
                 }
-                // Solo mandar al visor PDF si NO es appsheet y NO es google
-                if(!url.contains("appsheet.com") && !url.contains("google.com") && !url.contains("gstatic.com")){
+                // URLs externas -> visor PDF (despues del login)
+                if(!url.contains("appsheet.com") && !url.contains("google.com") && !url.contains("gstatic.com") && !url.contains("googleusercontent.com")){
                     if(url.startsWith("http") &&!url.contains("datastudio.google.com") &&!url.contains("lookerstudio.google.com")){
                         if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
                         mostrarLinkEnVisor(url); return true;
