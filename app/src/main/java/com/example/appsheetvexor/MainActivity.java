@@ -61,8 +61,8 @@ public class MainActivity extends AppCompatActivity {
     private Bitmap selectedIconBitmap = null;
     private ImageView previewIconView;
     private final String DATASTUDIO_URL = "https://datastudio.google.com/embed/reporting/a9a7f8c7-b820-4b17-9e6b-b6168d82d175/page/jfW6F";
+    // ESTA VARIABLE LA REEMPLAZA GITHUB CON LA URL COMPLETA DE BLOGGER
     private String APPSHEET_URL = "https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile";
-    private final String APP_ID = "06effb1c-9afa-464d-9b0e-5db6e583136b";
     private final String GOOGLE_SHEET_API_URL = "https://script.google.com/macros/s/AKfycbxctlMwBkbUbq5M7yZ_objkvRx_AOmUOoZYz_KM5ItJ0GzGg1jxAhOFIfBas5QCnKKe/exec";
     private final String PAYPAL_LINK = "https://www.paypal.com/ncp/payment/4ADF32MFFTY2N";
     private boolean isLicensed = false;
@@ -85,6 +85,22 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface public void estadoPlan(){ runOnUiThread(() -> mostrarEstadoPlanDialog()); }
         @JavascriptInterface public void activarPro(){ runOnUiThread(() -> mostrarActivarProDialog()); }
         @JavascriptInterface public void comprarLicencia(){ runOnUiThread(() -> { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(PAYPAL_LINK))); }); }
+    }
+
+    // ESTA FUNCION EXCLUYE LA URL COMPLETA DE TU APP
+    private boolean esUrlDeMiApp(String url){
+        if(url==null) return false;
+        // Excluye exacto lo que viene de Blogger
+        if(url.equals(APPSHEET_URL)) return true;
+        // Excluye la base sin parametros ?platform=mobile
+        String base = APPSHEET_URL.split("\\?")[0];
+        if(!base.isEmpty() && url.startsWith(base)) return true;
+        // Si la URL contiene el ID de tu app pero NO es gettablefileurl (PDF)
+        // entonces es navegacion interna de tu app, no la embebas
+        if(url.contains("06effb1c-9afa-464d-9b0e-5db6e583136b") && !url.contains("gettablefileurl") && !url.contains("getfile") && !url.toLowerCase().contains(".pdf")){
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -133,7 +149,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
-            if(url.contains(APP_ID) || url.contains("appsheet.com/start")) return;
+            if(esUrlDeMiApp(url)) return;
             if(url.contains("gettablefileurl") || url.contains("getfile") || mimetype.contains("pdf") || url.contains("googleusercontent") || url.toLowerCase().contains(".pdf")){
                 if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return; }
                 descargarPdfDeAppSheet(url);
@@ -142,11 +158,7 @@ public class MainActivity extends AppCompatActivity {
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override public void onPermissionRequest(PermissionRequest r){ r.grant(r.getResources()); }
-            @Override public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg){
-                // Si AppSheet intenta abrir su propia app en ventana nueva, NO lo interceptes
-                // Dejalo cargar normal en el webView principal
-                return false;
-            }
+            @Override public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg){ return false; }
             @Override public boolean onShowFileChooser(WebView w, ValueCallback<Uri[]> cb, FileChooserParams p){
                 filePathCallback = cb;
                 AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
@@ -198,16 +210,13 @@ public class MainActivity extends AppCompatActivity {
                 view.evaluateJavascript(js,null);
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, String url){
-                // FIX CLAVE: TU APP ES UNA URL, NO LA EMBEBAS COMO URL EXTERNA
-                if(url.contains(APP_ID) || url.contains("appsheet.com/start/06effb1c")) return false;
+                // USA LA URL COMPLETA DE BLOGGER, NO EL ID
+                if(esUrlDeMiApp(url)) return false;
                 if(url.contains("accounts.google.com") || url.contains("oauth2") || url.contains("ServiceLogin") || url.contains("signin")) return false;
-
-                // PDF SIEMPRE
                 if(url.contains("gettablefileurl") || url.contains("getfile") || url.toLowerCase().contains(".pdf") || url.contains("googleusercontent.com") || url.contains("storage.googleapis.com")){
                     if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
                     descargarPdfDeAppSheet(url); return true;
                 }
-                // URL EXTERNA (MENOS TU APP)
                 if(!url.contains("appsheet.com") && !url.contains("google.com")){
                     if(url.startsWith("http") &&!url.contains("datastudio.google.com") &&!url.contains("lookerstudio.google.com")){
                         if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
@@ -408,16 +417,31 @@ public class MainActivity extends AppCompatActivity {
     }
     private void descargarPdfDeAppSheet(String urlPdf){
         Toast.makeText(this, "Abriendo PDF...", Toast.LENGTH_SHORT).show();
-        String cookie = CookieManager.getInstance().getCookie(urlPdf);
+        String cookieAppSheet = CookieManager.getInstance().getCookie("https://www.appsheet.com");
+        String cookiePdf = CookieManager.getInstance().getCookie(urlPdf);
+        String finalCookie = cookieAppSheet!=null? cookieAppSheet : cookiePdf;
         String userAgent = webView.getSettings().getUserAgentString();
         new Thread(() -> {
             try{
                 URL url = new URL(urlPdf); HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                if(cookie!=null) conn.setRequestProperty("Cookie", cookie); conn.setRequestProperty("User-Agent", userAgent); conn.connect();
+                conn.setInstanceFollowRedirects(true);
+                if(finalCookie!=null) conn.setRequestProperty("Cookie", finalCookie);
+                conn.setRequestProperty("User-Agent", userAgent);
+                conn.connect();
+                int code = conn.getResponseCode();
+                if(code==301 || code==302 || code==307){
+                    String newUrl = conn.getHeaderField("Location");
+                    url = new URL(newUrl);
+                    conn = (HttpURLConnection) url.openConnection();
+                    if(finalCookie!=null) conn.setRequestProperty("Cookie", finalCookie);
+                    conn.setRequestProperty("User-Agent", userAgent);
+                    conn.connect();
+                }
                 InputStream is = conn.getInputStream(); String fileName = "GUIA_"+new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date())+".pdf"; File file = new File(getCacheDir(), fileName);
-                FileOutputStream fos = new FileOutputStream(file); byte[] buffer = new byte[4096]; int len; while((len=is.read(buffer))!=-1){ fos.write(buffer,0,len); } fos.close(); is.close();
-                runOnUiThread(() -> mostrarPdfEnVisor(file));
-            }catch(Exception e){ runOnUiThread(() -> Toast.makeText(this, "Error PDF: "+e.getMessage(), Toast.LENGTH_LONG).show()); }
+                FileOutputStream fos = new FileOutputStream(file); byte[] buffer = new byte[8192]; int len; while((len=is.read(buffer))!=-1){ fos.write(buffer,0,len); } fos.close(); is.close();
+                if(file.length() < 5000){ runOnUiThread(() -> mostrarLinkEnVisor(urlPdf)); }
+                else{ runOnUiThread(() -> mostrarPdfEnVisor(file)); }
+            }catch(Exception e){ runOnUiThread(() -> { Toast.makeText(this, "Error PDF: "+e.getMessage(), Toast.LENGTH_LONG).show(); mostrarLinkEnVisor(urlPdf); }); }
         }).start();
     }
     private void mostrarPdfEnVisor(File file){
