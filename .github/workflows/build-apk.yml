@@ -1,75 +1,113 @@
-name: Build APK VEXOR
+name: 🚀 VEXOR APK Builder
 
 on:
   workflow_dispatch:
     inputs:
-      appsheet_url:
-        description: 'URL AppSheet del cliente'
-        required: true
-        type: string
-      app_name:
+      appName:
         description: 'Nombre de la App'
         required: true
-        type: string
-      icon_base64:
-        description: 'Icono en Base64 (opcional)'
+        default: 'NEXO'
+      appUrl:
+        description: 'Link AppSheet'
+        required: true
+        default: 'https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile'
+      iconBase64:
+        description: 'Icono WEBP base64'
         required: false
-        type: string
+  repository_dispatch:
+    types: [build-apk]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Necesario para crear Releases
+
     steps:
-      - name: Checkout repo
+      - name: 📥 Checkout código
         uses: actions/checkout@v4
 
-      - name: Limpiar y Reemplazar URL AppSheet
-        run: |
-          URL_CRUDO="${{ inputs.appsheet_url }}"
-          echo "URL cruda: $URL_CRUDO"
-          URL_LIMPIA=$(echo "$URL_CRUDO" | cut -d'#' -f1 | cut -d'&' -f1)
-          URL_LIMPIA=$(echo "$URL_LIMPIA" | sed 's/platform=desktop/platform=mobile/g')
-          if [[ "$URL_LIMPIA" != *"platform=mobile"* ]]; then
-            if [[ "$URL_LIMPIA" == *"?"* ]]; then
-              URL_LIMPIA="${URL_LIMPIA}&platform=mobile"
-            else
-              URL_LIMPIA="${URL_LIMPIA}?platform=mobile"
-            fi
-          fi
-          echo "URL limpia: $URL_LIMPIA"
-          sed -i "s|https://www.appsheet.com/start/.*|${URL_LIMPIA}\";|g" app/src/main/java/com/example/appsheetvexor/MainActivity.java
-          grep -n "APPSHEET_URL" app/src/main/java/com/example/appsheetvexor/MainActivity.java
-
-      - name: Reemplazar nombre de la App
-        run: |
-          sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">${{ inputs.app_name }}<\/string>/g" app/src/main/res/values/strings.xml
-
-      - name: Reemplazar icono
-        if: inputs.icon_base64 != ''
-        run: |
-          echo "${{ inputs.icon_base64 }}" | base64 --decode > icono_cliente.png
-          rm -rf app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi app/src/main/res/mipmap-anydpi-v26
-          mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
-          for d in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
-            cp icono_cliente.png app/src/main/res/mipmap-$d/ic_launcher.png
-            cp icono_cliente.png app/src/main/res/mipmap-$d/ic_launcher_round.png
-            cp icono_cliente.png app/src/main/res/mipmap-$d/ic_launcher.webp
-            cp icono_cliente.png app/src/main/res/mipmap-$d/ic_launcher_round.webp
-          done
-
-      - name: Setup Java 17
+      - name: ☕ Setup JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build Debug APK
+      - name: 🔧 Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: 🎨 Procesar Icono
+        id: icon
+        run: |
+          APP_NAME="${{ github.event.inputs.appName || github.event.client_payload.appName || 'NEXO' }}"
+          APP_URL="${{ github.event.inputs.appUrl || github.event.client_payload.appUrl }}"
+          ICON_B64="${{ github.event.inputs.iconBase64 || github.event.client_payload.iconBase64 }}"
+
+          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+          echo "APP_URL=$APP_URL" >> $GITHUB_ENV
+
+          # Guardar icono si viene
+          if [! -z "$ICON_B64" ]; then
+            echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp 2>/dev/null || \
+            echo "$ICON_B64" | base64 -d > app/src/main/ic_launcher.webp
+            # Copiar a todas las densidades
+            mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
+            for d in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
+              cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp app/src/main/res/mipmap-$d/ic_launcher.webp 2>/dev/null || true
+              cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp app/src/main/res/mipmap-$d/ic_launcher_round.webp 2>/dev/null || true
+            done
+            cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.webp
+          fi
+
+          # Actualizar URL y nombre en el código (ajusta esta ruta a donde tengas tu WebView)
+          # Ejemplo: reemplaza en MainActivity.kt
+          if [ -f "app/src/main/java/com/vexor/MainActivity.kt" ]; then
+            sed -i "s|https://www.appsheet.com/start/.*|$APP_URL|g" app/src/main/java/com/vexor/MainActivity.kt
+            sed -i "s|NEXO|$APP_NAME|g" app/src/main/java/com/vexor/MainActivity.kt
+          fi
+
+          # Actualizar strings.xml
+          if [ -f "app/src/main/res/values/strings.xml" ]; then
+            sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$APP_NAME</string>|g" app/src/main/res/values/strings.xml
+          fi
+
+      - name: 🔨 Build APK Debug
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+         ./gradlew assembleDebug --stacktrace
 
-      - name: Subir APK
+      - name: 📦 Renombrar APK
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
+          NEW_NAME="${{ env.APP_NAME }}-VEXOR-${{ github.run_number }}.apk"
+          cp "$APK_PATH" "$NEW_NAME"
+          echo "APK_FILE=$NEW_NAME" >> $GITHUB_ENV
+          echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
+
+      - name: 🚀 Crear Release y subir APK (para tu botón de descarga)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.APP_NAME }}-${{ github.run_number }}
+          name: ${{ env.APP_NAME }} APK v${{ github.run_number }}
+          body: |
+            🤖 **APK Generada Automáticamente**
+
+            **App:** ${{ env.APP_NAME }}
+            **Link:** ${{ env.APP_URL }}
+            **Build:** ${{ github.run_number }}
+
+            📥 Descarga directa abajo.
+
+            Generado por VEXOR Builder
+          files: ${{ env.APK_FILE }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 📤 Subir como Artifact también
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.app_name }}-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: ${{ env.APP_NAME }}-APK
+          path: ${{ env.APK_FILE }}
+          retention-days: 30
