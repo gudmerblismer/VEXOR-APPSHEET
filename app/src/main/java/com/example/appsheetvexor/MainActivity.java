@@ -84,7 +84,6 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface public void estadoPlan(){ runOnUiThread(() -> mostrarEstadoPlanDialog()); }
         @JavascriptInterface public void activarPro(){ runOnUiThread(() -> mostrarActivarProDialog()); }
         @JavascriptInterface public void comprarLicencia(){ runOnUiThread(() -> { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(PAYPAL_LINK))); }); }
-        @JavascriptInterface public void recargar(){ runOnUiThread(() -> { if(webView!=null) webView.reload(); }); }
     }
 
     @Override
@@ -218,43 +217,17 @@ public class MainActivity extends AppCompatActivity {
 
         webView.loadUrl(APPSHEET_URL);
 
-        // FIX INTELIGENTE - SE RECARGA SOLO HASTA QUE CARGUE EL MENU COMPLETO
+        // FIX REAL DEFINITIVO - REINICIO AUTOMATICO LA PRIMERA VEZ
+        // Esto simula exactamente lo que haces manual: salir y volver a entrar
         SharedPreferences firstPrefs = getSharedPreferences("VEXOR_FIRST", MODE_PRIVATE);
-        // Si ya esta marcado como cargado, no hace nada
-        if(!firstPrefs.getBoolean("menu_cargado_ok", false)){
-            webView.postDelayed(new Runnable() {
-                int intentos = 0;
-                @Override
-                public void run() {
-                    if(intentos >= 8){
-                        firstPrefs.edit().putBoolean("menu_cargado_ok", true).apply();
-                        return;
-                    }
-                    webView.evaluateJavascript("(function(){ return document.documentElement.innerHTML; })()", htmlValue -> {
-                        try{
-                            String html = htmlValue != null ? htmlValue : "";
-                            // Detecta pantalla vacia como tu foto: tiene MENÚ pero le faltan iconos o textos
-                            boolean tieneMenu = html.contains("MEN\\u00da") || html.contains("MENU");
-                            boolean tieneAdmin = html.contains("ADMINIS") || html.contains("ADMIN");
-                            boolean tieneAjustes = html.contains("AJUSTES");
-                            boolean tieneContab = html.contains("CONTAB");
-                            boolean estaIncompleto = tieneMenu && (!tieneAdmin || !tieneAjustes || !tieneContab || html.length() < 20000);
-
-                            if(estaIncompleto){
-                                intentos++;
-                                webView.reload();
-                                webView.postDelayed(this, 3500);
-                            }else{
-                                // Ya cargo bien, no volver a hacer nunca mas
-                                firstPrefs.edit().putBoolean("menu_cargado_ok", true).apply();
-                            }
-                        }catch(Exception e){
-                            intentos++;
-                            webView.reload();
-                            webView.postDelayed(this, 3500);
-                        }
-                    });
-                }
+        boolean yaReiniciado = firstPrefs.getBoolean("reiniciado", false);
+        if(!yaReiniciado){
+            webView.postDelayed(() -> {
+                firstPrefs.edit().putBoolean("reiniciado", true).apply();
+                Intent intent = new Intent(MainActivity.this, MainActivity.class);
+                intent.putExtra("direct_url", APPSHEET_URL);
+                finish();
+                startActivity(intent);
             }, 4000);
         }
     }
