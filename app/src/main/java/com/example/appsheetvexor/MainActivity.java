@@ -191,40 +191,43 @@ public class MainActivity extends AppCompatActivity {
                 view.evaluateJavascript(js,null);
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, String url){
-                String currentUrl = view.getUrl() != null ? view.getUrl() : "";
-                boolean estaEnLogin = currentUrl.contains("accounts.google.com") || currentUrl.contains("ServiceLogin") || currentUrl.contains("signin") || currentUrl.contains("oauth");
-
-                // 1. SIEMPRE PERMITIR GOOGLE - NUNCA BLOQUEAR (ARREGLA PANTALLA BLANCA DE TU FOTO)
-                if(url.contains("accounts.google.com") || 
-                   url.contains("accounts.youtube.com") ||
-                   url.contains("gstatic.com") ||
-                   url.contains("googleusercontent.com") ||
-                   url.contains("oauth") ||
-                   url.contains("ServiceLogin") ||
-                   url.contains("signin/v2") ||
-                   url.contains("CheckCookie")){
+                // FIX: GOOGLE LOGIN SIEMPRE PERMITIDO - ARREGLA PANTALLA BLANCA PRIMERA VEZ
+                if(url.contains("accounts.google.com") || url.contains("gstatic.com") || url.contains("googleusercontent.com") || url.contains("oauth") || url.contains("ServiceLogin") || url.contains("signin")){
                     return false;
                 }
 
-                // 2. Si aun esta en login, no activar PDF/URL todavia
-                if(estaEnLogin){
-                    return false;
-                }
-
-                // 3. YA DENTRO DE APPSHEET (CON O SIN MENU) -> PDF Y URL FUNCIONAN
+                // PDF CON LICENCIA - GRATIS 30 DIAS, LUEGO PIDE LICENCIA
                 if(url.contains("gettablefileurl") || url.contains("getfile") || url.toLowerCase().contains(".pdf")){
-                    if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
-                    descargarPdfDeAppSheet(url); return true;
+                    if(!hasAccess()){
+                        mostrarBloqueoPorExpiracion();
+                        return true;
+                    }
+                    descargarPdfDeAppSheet(url);
+                    return true;
                 }
                 
+                // URL EXTERNA CON LICENCIA - GRATIS 30 DIAS, LUEGO PIDE LICENCIA
                 if(!url.contains("appsheet.com") && !url.contains("google.com") && !url.contains("gstatic.com") && !url.contains("googleusercontent.com")){
-                    if(url.startsWith("http") &&!url.contains("datastudio.google.com") &&!url.contains("lookerstudio.google.com")){
-                        if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
-                        mostrarLinkEnVisor(url); return true;
+                    if(url.startsWith("http") && !url.contains("datastudio.google.com") && !url.contains("lookerstudio.google.com")){
+                        if(!hasAccess()){
+                            mostrarBloqueoPorExpiracion();
+                            return true;
+                        }
+                        mostrarLinkEnVisor(url);
+                        return true;
+                    }
+                    // DATA STUDIO TAMBIEN CON LICENCIA
+                    if(url.contains("datastudio.google.com") || url.contains("lookerstudio.google.com")){
+                        if(!hasAccess()){
+                            mostrarBloqueoPorExpiracion();
+                            return true;
+                        }
                     }
                 }
 
-                if(pdfOverlay.getVisibility()==View.VISIBLE){ pdfOverlay.setVisibility(View.GONE); }
+                if(pdfOverlay.getVisibility()==View.VISIBLE){
+                    pdfOverlay.setVisibility(View.GONE);
+                }
                 return false;
             }
         });
