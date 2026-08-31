@@ -61,7 +61,6 @@ public class MainActivity extends AppCompatActivity {
     private Bitmap selectedIconBitmap = null;
     private ImageView previewIconView;
     private final String DATASTUDIO_URL = "https://datastudio.google.com/embed/reporting/a9a7f8c7-b820-4b17-9e6b-b6168d82d175/page/jfW6F";
-    // ESTA VARIABLE LA REEMPLAZA GITHUB CON LA URL COMPLETA DE BLOGGER
     private String APPSHEET_URL = "https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile";
     private final String GOOGLE_SHEET_API_URL = "https://script.google.com/macros/s/AKfycbxctlMwBkbUbq5M7yZ_objkvRx_AOmUOoZYz_KM5ItJ0GzGg1jxAhOFIfBas5QCnKKe/exec";
     private final String PAYPAL_LINK = "https://www.paypal.com/ncp/payment/4ADF32MFFTY2N";
@@ -85,21 +84,16 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface public void estadoPlan(){ runOnUiThread(() -> mostrarEstadoPlanDialog()); }
         @JavascriptInterface public void activarPro(){ runOnUiThread(() -> mostrarActivarProDialog()); }
         @JavascriptInterface public void comprarLicencia(){ runOnUiThread(() -> { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(PAYPAL_LINK))); }); }
+        @JavascriptInterface public void abrirPdfJs(String url){ runOnUiThread(() -> { if(esUrlDeMiApp(url)) return; if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return; } descargarPdfDeAppSheet(url); }); }
+        @JavascriptInterface public void abrirUrlJs(String url){ runOnUiThread(() -> { if(esUrlDeMiApp(url)) return; if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return; } mostrarLinkEnVisor(url); }); }
     }
 
-    // ESTA FUNCION EXCLUYE LA URL COMPLETA DE TU APP
     private boolean esUrlDeMiApp(String url){
         if(url==null) return false;
-        // Excluye exacto lo que viene de Blogger
         if(url.equals(APPSHEET_URL)) return true;
-        // Excluye la base sin parametros ?platform=mobile
         String base = APPSHEET_URL.split("\\?")[0];
-        if(!base.isEmpty() && url.startsWith(base)) return true;
-        // Si la URL contiene el ID de tu app pero NO es gettablefileurl (PDF)
-        // entonces es navegacion interna de tu app, no la embebas
-        if(url.contains("06effb1c-9afa-464d-9b0e-5db6e583136b") && !url.contains("gettablefileurl") && !url.contains("getfile") && !url.toLowerCase().contains(".pdf")){
-            return true;
-        }
+        if(!base.isEmpty() && url.startsWith(base) && !url.contains("gettablefileurl") && !url.contains("getfile") && !url.toLowerCase().contains(".pdf")) return true;
+        if(url.contains("06effb1c-9afa-464d-9b0e-5db6e583136b") && !url.contains("gettablefileurl") && !url.contains("getfile") && !url.toLowerCase().contains(".pdf")) return true;
         return false;
     }
 
@@ -205,12 +199,12 @@ public class MainActivity extends AppCompatActivity {
                         + "document.addEventListener('click', function(e){ var el=e.target; for(var i=0;i<5 && el; i++){ if(el.innerText==='MENÚ' || (el.innerText||'').toUpperCase().indexOf('MENÚ')!=-1){ try{window.AndroidQR.cerrarPdf();}catch(err){} break; } if(el.getAttribute && el.getAttribute('aria-label') && el.getAttribute('aria-label').toLowerCase().indexOf('back')!=-1){ try{window.AndroidQR.cerrarPdf();}catch(err){} break; } el=el.parentElement; } }, true);"
                         + "window.addEventListener('popstate', function(){ try{window.AndroidQR.cerrarPdf();}catch(e){} });"
                         + "(function(){ var _push=history.pushState; history.pushState=function(){ try{window.AndroidQR.cerrarPdf();}catch(e){} return _push.apply(this, arguments); }; var _replace=history.replaceState; history.replaceState=function(){ try{window.AndroidQR.cerrarPdf();}catch(e){} return _replace.apply(this, arguments); }; })();"
+                        + "document.addEventListener('click', function(e){ var el=e.target; for(var i=0;i<8&&el;i++){ var href=el.getAttribute&&el.getAttribute('href'); if(href){ if(href.includes('gettablefileurl')||href.includes('getfile')||href.toLowerCase().includes('.pdf')||href.includes('googleusercontent.com')||href.includes('storage.googleapis.com')){ e.preventDefault(); e.stopPropagation(); try{window.AndroidQR.abrirPdfJs(href);}catch(err){} return false; } if(href.startsWith('http')&&!href.includes('appsheet.com')&&!href.includes('google.com')&&!href.includes('datastudio.google.com')&&!href.includes('lookerstudio.google.com')){ e.preventDefault(); e.stopPropagation(); try{window.AndroidQR.abrirUrlJs(href);}catch(err){} return false; } } el=el.parentElement; } }, true);"
                         + "setInterval(function(){ embeber(); inyectarPanelLicencias(); },1000); embeber(); inyectarPanelLicencias();"
                         + "})()";
                 view.evaluateJavascript(js,null);
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, String url){
-                // USA LA URL COMPLETA DE BLOGGER, NO EL ID
                 if(esUrlDeMiApp(url)) return false;
                 if(url.contains("accounts.google.com") || url.contains("oauth2") || url.contains("ServiceLogin") || url.contains("signin")) return false;
                 if(url.contains("gettablefileurl") || url.contains("getfile") || url.toLowerCase().contains(".pdf") || url.contains("googleusercontent.com") || url.contains("storage.googleapis.com")){
