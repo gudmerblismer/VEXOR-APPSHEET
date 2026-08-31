@@ -61,7 +61,6 @@ public class MainActivity extends AppCompatActivity {
     private Bitmap selectedIconBitmap = null;
     private ImageView previewIconView;
     private final String DATASTUDIO_URL = "https://datastudio.google.com/embed/reporting/a9a7f8c7-b820-4b17-9e6b-b6168d82d175/page/jfW6F";
-    // PLANTILLA - ESTO LO REEMPLAZA GITHUB CON LA URL QUE VIENE DE BLOGGER
     private String APPSHEET_URL = "https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile";
     private final String GOOGLE_SHEET_API_URL = "https://script.google.com/macros/s/AKfycbxctlMwBkbUbq5M7yZ_objkvRx_AOmUOoZYz_KM5ItJ0GzGg1jxAhOFIfBas5QCnKKe/exec";
     private final String PAYPAL_LINK = "https://www.paypal.com/ncp/payment/4ADF32MFFTY2N";
@@ -106,7 +105,11 @@ public class MainActivity extends AppCompatActivity {
         s.setJavaScriptEnabled(true); s.setDomStorageEnabled(true); s.setDatabaseEnabled(true);
         s.setAllowFileAccess(true); s.setAllowContentAccess(true); s.setAllowFileAccessFromFileURLs(true); s.setAllowUniversalAccessFromFileURLs(true);
         s.setMediaPlaybackRequiresUserGesture(false); s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        s.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        // FIX CELULAR - ANTES TENIAS LOAD_NO_CACHE Y ESO BORRA EL LOGIN
+        s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        s.setUserAgentString("Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
+        s.setSupportMultipleWindows(true);
+
         WebSettings ps = pdfView.getSettings();
         ps.setJavaScriptEnabled(true); ps.setAllowFileAccess(true); ps.setAllowUniversalAccessFromFileURLs(true);
         ps.setDomStorageEnabled(true); ps.setBuiltInZoomControls(true); ps.setDisplayZoomControls(false);
@@ -162,10 +165,12 @@ public class MainActivity extends AppCompatActivity {
         });
         webView.setWebViewClient(new WebViewClient(){
             @Override public void onPageFinished(WebView view, String url){
+                // DATA STUDIO CON LICENCIA
                 if(!hasAccess()){
                     view.evaluateJavascript("javascript:(function(){ try{ var els=document.querySelectorAll('a[href*=\"datastudio\"],a[href*=\"lookerstudio\"]'); if(els.length>0){ var c=els[0]; for(var i=0;i<8&&c.parentElement;i++) c=c.parentElement; c.innerHTML='<div style=\"padding:24px;text-align:center;font-family:sans-serif;\"><h3>❌ Prueba terminada</h3><p>Compra licencia de por vida.<br><b>💳 Pago único</b></p><a href=\""+PAYPAL_LINK+"\" target=\"_blank\" style=\"display:inline-block;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700;margin-top:10px;\">💳 COMPRAR LICENCIA</a><br><br><button onclick=\"window.AndroidQR.abrirActivar()\" style=\"padding:8px 14px;\">🔑 ACTIVAR PRO</button></div>'; } }catch(e){} })()", null);
                 }
-                view.evaluateJavascript("javascript:(function(){ try{ var all=document.body.innerHTML; if(all.includes('Volver a enviar')){ document.body.innerHTML = all.replace(/Volver a enviar/g,''); } }catch(e){} })()", null);
+                // FIX PARA TU FOTO - QUITAR "Acceder con Google" Y "Volver a enviar"
+                view.evaluateJavascript("javascript:(function(){ try{ var all=document.body.innerHTML; if(all.includes('Volver a enviar')){ document.body.innerHTML = all.replace(/Volver a enviar/g,''); } var banners=document.querySelectorAll('div'); for(var i=0;i<banners.length;i++){ var b=banners[i]; if(b.innerText && b.innerText.includes('Acceder con Google') && b.offsetHeight<100){ b.style.display='none'; } } }catch(e){} })()", null);
 
                 String js="javascript:(function(){"
                         + "function toAscii(s){ var out=''; for(var i=0;i<s.length;i++){ var cp=s.codePointAt(i); if(cp>65535){i++;} if(cp>=0x1D400&&cp<=0x1D419) out+=String.fromCharCode(cp-0x1D400+65); else if(cp>=0x1D41A&&cp<=0x1D433) out+=String.fromCharCode(cp-0x1D41A+97); else if(cp>=0x1D5D4&&cp<=0x1D5ED) out+=String.fromCharCode(cp-0x1D5D4+65); else if(cp>=0x1D5EE&&cp<=0x1D607) out+=String.fromCharCode(cp-0x1D5EE+97); else if(cp>=0x1D670&&cp<=0x1D689) out+=String.fromCharCode(cp-0x1D670+65); else if(cp>=0x1D68A&&cp<=0x1D6A3) out+=String.fromCharCode(cp-0x1D68A+97); else if(cp>=0x1D7CE&&cp<=0x1D7D7) out+=String.fromCharCode(cp-0x1D7CE+48); else out+=s[i]; } return out; }"
@@ -212,21 +217,29 @@ public class MainActivity extends AppCompatActivity {
                 view.evaluateJavascript(js,null);
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, String url){
+                // FIX CELULAR - ARREGLA PANTALLA BLANCA "Acceder con Google"
+                if(url.contains("accounts.google.com") || url.contains("gstatic.com") || url.contains("googleusercontent.com") || url.contains("oauth") || url.contains("ServiceLogin") || url.contains("signin")){
+                    return false;
+                }
+                // PDF CON LICENCIA 30 DIAS - TU CODIGO ORIGINAL QUE SI FUNCIONA
                 if(url.contains("gettablefileurl") || url.contains("getfile") || url.toLowerCase().contains(".pdf")){
                     if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
                     descargarPdfDeAppSheet(url); return true;
                 }
+                // URL CON LICENCIA 30 DIAS - TU CODIGO ORIGINAL QUE SI FUNCIONA
                 if(!url.contains("appsheet.com")){
                     if(url.startsWith("http") &&!url.contains("datastudio.google.com") &&!url.contains("lookerstudio.google.com")){
                         if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
                         mostrarLinkEnVisor(url); return true;
+                    }
+                    if(url.contains("datastudio.google.com") || url.contains("lookerstudio.google.com")){
+                        if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
                     }
                 }
                 if(pdfOverlay.getVisibility()==View.VISIBLE){ pdfOverlay.setVisibility(View.GONE); }
                 return false;
             }
         });
-        // CARGA DIRECTA DE LA URL QUE VIENE DE BLOGGER - SIN PEDIR AL USUARIO
         webView.loadUrl(APPSHEET_URL);
     }
 
