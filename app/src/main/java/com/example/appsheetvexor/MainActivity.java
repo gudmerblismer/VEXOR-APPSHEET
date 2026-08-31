@@ -193,16 +193,13 @@ public class MainActivity extends AppCompatActivity {
                 view.evaluateJavascript(js,null);
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, String url){
-                // FIX TUYO: FORZAR MOBILE SIEMPRE
                 if(url.contains("appsheet.com") && url.contains("platform=desktop")){
                     view.loadUrl(url.replace("platform=desktop", "platform=mobile"));
                     return true;
                 }
-                // NO INTERCEPTAR LOGIN GOOGLE
                 if(url.contains("accounts.google.com") || url.contains("oauth") || url.contains("ServiceLogin") || url.contains("signin") || url.contains("consent")){
                     return false;
                 }
-                // 1. PDF SIEMPRE PRIMERO
                 if(url.contains("gettablefileurl") || url.contains("getfile")){
                     if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
                     descargarPdfDeAppSheet(url); return true;
@@ -211,9 +208,7 @@ public class MainActivity extends AppCompatActivity {
                     if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
                     descargarPdfDeAppSheet(url); return true;
                 }
-                // 2. EXCLUIR TU URL COMPLETA DE BLOGGER
                 if(esUrlDeMiApp(url)) return false;
-
                 if(!url.contains("appsheet.com")){
                     if(url.startsWith("http") &&!url.contains("datastudio.google.com") &&!url.contains("lookerstudio.google.com")){
                         if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
@@ -314,7 +309,7 @@ public class MainActivity extends AppCompatActivity {
             detalle = "💳 Pago único - De por vida\nNo vuelves a pagar nunca más.\n\n📦 Plan: " + licensePlan + "\n📱 Dispositivos: " + licenseUsed + "/" + licenseMax + " (de por vida)\n\nTodo desbloqueado para siempre:\n✅ Data Studio embebido\n✅ PDFs y URLs\n✅ QR Scanner\n✅ Accesos directos ilimitados";
         }else if(trialActive && trialAllowed){
             estado = "⏳ Te quedan " + trialDaysLeft + " días";
-            detalle = "⏳ Te quedan " + trialDaysLeft + " días de prueba gratis.\n📅 Expira: " + new SimpleDateFormat("dd/MM/yyyy").format(new Date(trialExpiresAt)) + "\n\n✅ Todo desbloqueado durante la prueba.\n💳 Al terminar compra licencia de por vida.\n💰 Pago único, sin mensualidades.");
+            detalle = "⏳ Te quedan " + trialDaysLeft + " días de prueba gratis.\n📅 Expira: " + new SimpleDateFormat("dd/MM/yyyy").format(new Date(trialExpiresAt)) + "\n\n✅ Todo desbloqueado durante la prueba.\n💳 Al terminar compra licencia de por vida.\n💰 Pago único, sin mensualidades.";
         }else{
             estado = "❌ PRUEBA TERMINADA";
             detalle = "❌ Tu prueba de 30 días terminó.\n\nRestricciones activas:\n❌ Data Studio bloqueado\n❌ PDF bloqueado\n❌ URLs externas bloqueadas\n✅ QR Scanner sigue funcionando\n\n💳 Compra licencia PRO de por vida\n💰 Pago único, sin mensualidades.\n📱 Incluye 1, 3 o 5 dispositivos según tu plan.";
