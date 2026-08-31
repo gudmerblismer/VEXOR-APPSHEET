@@ -84,18 +84,18 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface public void estadoPlan(){ runOnUiThread(() -> mostrarEstadoPlanDialog()); }
         @JavascriptInterface public void activarPro(){ runOnUiThread(() -> mostrarActivarProDialog()); }
         @JavascriptInterface public void comprarLicencia(){ runOnUiThread(() -> { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(PAYPAL_LINK))); }); }
-        // REINICIO EN CUALQUIER VISTA
         @JavascriptInterface public void reiniciarEnCualquierVista(){
-            runOnUiThread(() -> {
-                SharedPreferences p = getSharedPreferences("VEXOR_FIRST", MODE_PRIVATE);
-                if(!p.getBoolean("reiniciado", false)){
-                    p.edit().putBoolean("reiniciado", true).apply();
-                    Intent i = new Intent(MainActivity.this, MainActivity.class);
-                    i.putExtra("direct_url", APPSHEET_URL);
-                    finish();
-                    startActivity(i);
-                }
-            });
+            // DESACTIVADO - ESTO CAUSABA PANTALLA BLANCA
+            // runOnUiThread(() -> {
+            //     SharedPreferences p = getSharedPreferences("VEXOR_FIRST", MODE_PRIVATE);
+            //     if(!p.getBoolean("reiniciado", false)){
+            //         p.edit().putBoolean("reiniciado", true).apply();
+            //         Intent i = new Intent(MainActivity.this, MainActivity.class);
+            //         i.putExtra("direct_url", APPSHEET_URL);
+            //         finish();
+            //         startActivity(i);
+            //     }
+            // });
         }
     }
 
@@ -123,6 +123,10 @@ public class MainActivity extends AppCompatActivity {
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        // FIX 1: USER AGENT PARA QUE APPSHEET NO SE QUEDE BLANCO
+        s.setUserAgentString("Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
+        s.setSupportMultipleWindows(true);
+        
         WebSettings ps = pdfView.getSettings();
         ps.setJavaScriptEnabled(true); ps.setAllowFileAccess(true); ps.setAllowUniversalAccessFromFileURLs(true);
         ps.setDomStorageEnabled(true); ps.setBuiltInZoomControls(true); ps.setDisplayZoomControls(false);
@@ -195,18 +199,30 @@ public class MainActivity extends AppCompatActivity {
                         + "document.addEventListener('click', function(e){ var el=e.target; for(var i=0;i<5 && el; i++){ if(el.innerText==='MENÚ' || (el.innerText||'').toUpperCase().indexOf('MENÚ')!=-1){ try{window.AndroidQR.cerrarPdf();}catch(err){} break; } if(el.getAttribute && el.getAttribute('aria-label') && el.getAttribute('aria-label').toLowerCase().indexOf('back')!=-1){ try{window.AndroidQR.cerrarPdf();}catch(err){} break; } el=el.parentElement; } }, true);"
                         + "window.addEventListener('popstate', function(){ try{window.AndroidQR.cerrarPdf();}catch(e){} });"
                         + "(function(){ var _push=history.pushState; history.pushState=function(){ try{window.AndroidQR.cerrarPdf();}catch(e){} return _push.apply(this, arguments); }; var _replace=history.replaceState; history.replaceState=function(){ try{window.AndroidQR.cerrarPdf();}catch(e){} return _replace.apply(this, arguments); }; })();"
-                        // REINICIO EN CUALQUIER VISTA DESPUES DE LOGIN
-                        + "function checkReinicio(){ try{ var esAppSheet = location.href.includes('appsheet.com/start'); var yaCargo = document.body.innerHTML.length > 4000; if(esAppSheet && yaCargo){ window.AndroidQR.reiniciarEnCualquierVista(); } }catch(e){} }"
-                        + "setInterval(function(){ embeber(); inyectarPanelLicencias(); checkReinicio(); },2000); embeber(); inyectarPanelLicencias();"
+                        // FIX 2: REINICIO DESACTIVADO
+                        + "function checkReinicio(){ /* DESACTIVADO PARA EVITAR BLANCO */ }"
+                        + "setInterval(function(){ embeber(); inyectarPanelLicencias(); },2000); embeber(); inyectarPanelLicencias();"
                         + "})()";
                 view.evaluateJavascript(js,null);
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, String url){
+                // FIX 3: ESTO ARREGLA TU FOTO - PERMITIR LOGIN GOOGLE
+                if(url.contains("accounts.google.com") || 
+                   url.contains("accounts.youtube.com") ||
+                   url.contains("google.com/signin") ||
+                   url.contains("oauth") ||
+                   url.contains("gstatic.com") ||
+                   url.contains("googleusercontent.com") ||
+                   url.contains("google.com/o/oauth") ||
+                   url.contains("ServiceLogin")){
+                    return false; // Dejar que cargue en el mismo webView
+                }
                 if(url.contains("gettablefileurl") || url.contains("getfile") || url.toLowerCase().contains(".pdf")){
                     if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
                     descargarPdfDeAppSheet(url); return true;
                 }
-                if(!url.contains("appsheet.com")){
+                // Solo mandar al visor PDF si NO es appsheet y NO es google
+                if(!url.contains("appsheet.com") && !url.contains("google.com") && !url.contains("gstatic.com")){
                     if(url.startsWith("http") &&!url.contains("datastudio.google.com") &&!url.contains("lookerstudio.google.com")){
                         if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
                         mostrarLinkEnVisor(url); return true;
