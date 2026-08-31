@@ -14,11 +14,13 @@ import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Message;
 import android.provider.MediaStore;
 import android.provider.Settings;
 import android.util.Base64;
 import android.view.View;
 import android.webkit.CookieManager;
+import android.webkit.DownloadListener;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
@@ -84,6 +86,8 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface public void estadoPlan(){ runOnUiThread(() -> mostrarEstadoPlanDialog()); }
         @JavascriptInterface public void activarPro(){ runOnUiThread(() -> mostrarActivarProDialog()); }
         @JavascriptInterface public void comprarLicencia(){ runOnUiThread(() -> { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(PAYPAL_LINK))); }); }
+        @JavascriptInterface public void abrirPdf(String url){ runOnUiThread(() -> { if(url!=null && !url.isEmpty()) descargarPdfDeAppSheet(url); }); }
+        @JavascriptInterface public void abrirUrl(String url){ runOnUiThread(() -> { if(url!=null && !url.isEmpty()) mostrarLinkEnVisor(url); }); }
     }
 
     private boolean esUrlDeMiApp(String url){
@@ -91,7 +95,26 @@ public class MainActivity extends AppCompatActivity {
         if(url.equals(APPSHEET_URL)) return true;
         String base = APPSHEET_URL.split("\\?")[0];
         if(!base.isEmpty() && url.startsWith(base)) return true;
+        // Si es la misma app pero con otros parametros de vista, no embebas
+        if(url.contains("/start/06effb1c-9afa-464d-9b0e-5db6e583136b")) return true;
         return false;
+    }
+
+    private void handleUrl(String url){
+        if(url==null) return;
+        if(url.contains("accounts.google.com") || url.contains("oauth") || url.contains("ServiceLogin") || url.contains("signin") || url.contains("consent")) return;
+        if(url.contains("gettablefileurl") || url.contains("getfile")){
+            if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return; }
+            descargarPdfDeAppSheet(url);
+            return;
+        }
+        if(esUrlDeMiApp(url)) return;
+        if(!url.contains("appsheet.com") && url.startsWith("http")){
+            if(!url.contains("datastudio.google.com") && !url.contains("lookerstudio.google.com")){
+                if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return; }
+                mostrarLinkEnVisor(url);
+            }
+        }
     }
 
     @Override
@@ -115,16 +138,27 @@ public class MainActivity extends AppCompatActivity {
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
         s.setUserAgentString(mobileUA);
         s.setSupportMultipleWindows(true);
+        s.setJavaScriptCanOpenWindowsAutomatically(true);
         WebSettings ps = pdfView.getSettings();
         ps.setJavaScriptEnabled(true); ps.setAllowFileAccess(true); ps.setAllowUniversalAccessFromFileURLs(true);
         ps.setDomStorageEnabled(true); ps.setBuiltInZoomControls(true); ps.setDisplayZoomControls(false);
         ps.setUserAgentString(mobileUA);
+        ps.setSupportMultipleWindows(true);
         CookieManager cm = CookieManager.getInstance();
         cm.setAcceptCookie(true);
         cm.setAcceptThirdPartyCookies(webView, true);
         cm.setAcceptThirdPartyCookies(pdfView, true);
         pdfView.setWebViewClient(new WebViewClient(){ @Override public boolean shouldOverrideUrlLoading(WebView view, String url){ view.loadUrl(url); return true; } });
         webView.addJavascriptInterface(new Bridge(), "AndroidQR");
+
+        // DESCARGA - AppSheet a veces abre PDF como descarga
+        webView.setDownloadListener(new DownloadListener() {
+            @Override
+            public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
+                handleUrl(url);
+            }
+        });
+
         btnQr.setOnClickListener(v -> abrirScanner());
         TextView btnPdfMenu = findViewById(R.id.btnPdfMenu);
         btnPdfMenu.setOnClickListener(v -> {
@@ -142,6 +176,21 @@ public class MainActivity extends AppCompatActivity {
         });
         webView.setWebChromeClient(new WebChromeClient() {
             @Override public void onPermissionRequest(PermissionRequest r){ r.grant(r.getResources()); }
+            @Override
+            public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
+                WebView newWebView = new WebView(MainActivity.this);
+                newWebView.setWebViewClient(new WebViewClient(){
+                    @Override
+                    public boolean shouldOverrideUrlLoading(WebView v, String url){
+                        handleUrl(url);
+                        return true;
+                    }
+                });
+                WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+                transport.setWebView(newWebView);
+                resultMsg.sendToTarget();
+                return true;
+            }
             @Override public boolean onShowFileChooser(WebView w, ValueCallback<Uri[]> cb, FileChooserParams p){
                 filePathCallback = cb;
                 AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
@@ -176,6 +225,8 @@ public class MainActivity extends AppCompatActivity {
                 }
                 view.evaluateJavascript("javascript:(function(){ try{ var all=document.body.innerHTML; if(all.includes('Volver a enviar')){ document.body.innerHTML = all.replace(/Volver a enviar/g,''); } }catch(e){} })()", null);
                 String js="javascript:(function(){"
+                        + "function interceptLink(el){ if(!el||el.dataset.vexorHook=='1') return; el.dataset.vexorHook='1'; el.addEventListener('click', function(e){ try{ var href=el.href||''; if(href.includes('gettablefileurl')||href.includes('getfile')){ e.preventDefault(); e.stopPropagation(); window.AndroidQR.abrirPdf(href); return false; } if(href.startsWith('http') && !href.includes('appsheet.com') && !href.includes('datastudio.google.com') && !href.includes('lookerstudio.google.com')){ e.preventDefault(); e.stopPropagation(); window.AndroidQR.abrirUrl(href); return false; } }catch(err){} }, true); }"
+                        + "function hookAll(){ var links=document.querySelectorAll('a'); for(var i=0;i<links.length;i++) interceptLink(links[i]); }"
                         + "function toAscii(s){ var out=''; for(var i=0;i<s.length;i++){ var cp=s.codePointAt(i); if(cp>65535){i++;} if(cp>=0x1D400&&cp<=0x1D419) out+=String.fromCharCode(cp-0x1D400+65); else if(cp>=0x1D41A&&cp<=0x1D433) out+=String.fromCharCode(cp-0x1D41A+97); else if(cp>=0x1D5D4&&cp<=0x1D5ED) out+=String.fromCharCode(cp-0x1D5D4+65); else if(cp>=0x1D5EE&&cp<=0x1D607) out+=String.fromCharCode(cp-0x1D5EE+97); else if(cp>=0x1D670&&cp<=0x1D689) out+=String.fromCharCode(cp-0x1D670+65); else if(cp>=0x1D68A&&cp<=0x1D6A3) out+=String.fromCharCode(cp-0x1D68A+97); else if(cp>=0x1D7CE&&cp<=0x1D7D7) out+=String.fromCharCode(cp-0x1D7CE+48); else out+=s[i]; } return out; }"
                         + "function getLabel(el){ var t=''; var p=el; for(var i=0;i<10&&p;i++){ t+=(p.innerText||'')+' '+(p.textContent||'')+' '; p=p.parentElement; } return toAscii(t).toUpperCase(); }"
                         + "function getViewName(){ try{ var h=location.hash.replace(/^#/,''); var sp=new URLSearchParams(h); var v=sp.get('view')||sp.get('viewName')||''; if(v) return v.toUpperCase(); }catch(e){} return ''; }"
@@ -188,7 +239,7 @@ public class MainActivity extends AppCompatActivity {
                         + "document.addEventListener('click', function(e){ var el=e.target; for(var i=0;i<5 && el; i++){ if(el.innerText==='MENÚ' || (el.innerText||'').toUpperCase().indexOf('MENÚ')!=-1){ try{window.AndroidQR.cerrarPdf();}catch(err){} break; } if(el.getAttribute && el.getAttribute('aria-label') && el.getAttribute('aria-label').toLowerCase().indexOf('back')!=-1){ try{window.AndroidQR.cerrarPdf();}catch(err){} break; } el=el.parentElement; } }, true);"
                         + "window.addEventListener('popstate', function(){ try{window.AndroidQR.cerrarPdf();}catch(e){} });"
                         + "(function(){ var _push=history.pushState; history.pushState=function(){ try{window.AndroidQR.cerrarPdf();}catch(e){} return _push.apply(this, arguments); }; var _replace=history.replaceState; history.replaceState=function(){ try{window.AndroidQR.cerrarPdf();}catch(e){} return _replace.apply(this, arguments); }; })();"
-                        + "setInterval(function(){ embeber(); inyectarPanelLicencias(); },1000); embeber(); inyectarPanelLicencias();"
+                        + "setInterval(function(){ embeber(); inyectarPanelLicencias(); hookAll(); },1000); embeber(); inyectarPanelLicencias(); hookAll();"
                         + "})()";
                 view.evaluateJavascript(js,null);
             }
@@ -204,13 +255,9 @@ public class MainActivity extends AppCompatActivity {
                     if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
                     descargarPdfDeAppSheet(url); return true;
                 }
-                if(url.toLowerCase().endsWith(".pdf")){
-                    if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
-                    descargarPdfDeAppSheet(url); return true;
-                }
                 if(esUrlDeMiApp(url)) return false;
-                if(!url.contains("appsheet.com")){
-                    if(url.startsWith("http") &&!url.contains("datastudio.google.com") &&!url.contains("lookerstudio.google.com")){
+                if(!url.contains("appsheet.com") && url.startsWith("http")){
+                    if(!url.contains("datastudio.google.com") && !url.contains("lookerstudio.google.com")){
                         if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
                         mostrarLinkEnVisor(url); return true;
                     }
