@@ -63,7 +63,6 @@ public class MainActivity extends AppCompatActivity {
     private File tempAudioFile;
     private Bitmap selectedIconBitmap = null;
     private ImageView previewIconView;
-    // YA NO ES FIJO - AHORA ES DINAMICO POR VISTA
     private String APPSHEET_URL = "https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile";
     private final String GOOGLE_SHEET_API_URL = "https://script.google.com/macros/s/AKfycbxctlMwBkbUbq5M7yZ_objkvRx_AOmUOoZYz_KM5ItJ0GzGg1jxAhOFIfBas5QCnKKe/exec";
     private final String PAYPAL_LINK = "https://www.paypal.com/ncp/payment/4ADF32MFFTY2N";
@@ -76,7 +75,6 @@ public class MainActivity extends AppCompatActivity {
     private String deviceId = "";
     private int licenseMax = 1;
     private int licenseUsed = 1;
-    // NUEVO: MAPEOS POR VISTA - ILIMITADO
     private SharedPreferences mapeosPrefs;
     private JSONObject mapeosPorVista = new JSONObject();
 
@@ -92,7 +90,6 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface public void comprarLicencia(){ runOnUiThread(() -> { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(PAYPAL_LINK))); }); }
         @JavascriptInterface public void abrirPdf(String url){ runOnUiThread(() -> { if(url!=null && !url.isEmpty()) descargarPdfDeAppSheet(url); }); }
         @JavascriptInterface public void abrirUrl(String url){ runOnUiThread(() -> { if(url!=null && !url.isEmpty()) mostrarLinkEnVisor(url); }); }
-        // NUEVO PARA LICENCIAS
         @JavascriptInterface public void gestionarMapeos(){ runOnUiThread(() -> mostrarDialogGestionMapeosPorVista()); }
         @JavascriptInterface public String getMapeosJson(){ try{ return mapeosPorVista.toString(); }catch(Exception e){ return "{}"; } }
     }
@@ -111,8 +108,7 @@ public class MainActivity extends AppCompatActivity {
         if(url.contains("accounts.google.com") || url.contains("oauth") || url.contains("ServiceLogin") || url.contains("signin") || url.contains("consent")) return;
         if(url.contains("gettablefileurl") || url.contains("getfile")){
             if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return; }
-            descargarPdfDeAppSheet(url);
-            return;
+            descargarPdfDeAppSheet(url); return;
         }
         if(esUrlDeMiApp(url)) return;
         if(!url.contains("appsheet.com") && url.startsWith("http")){
@@ -156,7 +152,10 @@ public class MainActivity extends AppCompatActivity {
         s.setJavaScriptEnabled(true); s.setDomStorageEnabled(true); s.setDatabaseEnabled(true);
         s.setAllowFileAccess(true); s.setAllowContentAccess(true); s.setAllowFileAccessFromFileURLs(true); s.setAllowUniversalAccessFromFileURLs(true);
         s.setMediaPlaybackRequiresUserGesture(false); s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        // OPTIMIZACION PARA DATA STUDIO EMBEBIDO CON MENU VISIBLE
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        s.setDomStorageEnabled(true);
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         s.setUserAgentString(mobileUA);
         s.setSupportMultipleWindows(true);
         s.setJavaScriptCanOpenWindowsAutomatically(true);
@@ -165,6 +164,8 @@ public class MainActivity extends AppCompatActivity {
         ps.setDomStorageEnabled(true); ps.setBuiltInZoomControls(true); ps.setDisplayZoomControls(false);
         ps.setUserAgentString(mobileUA);
         ps.setSupportMultipleWindows(true);
+        ps.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+        pdfView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         CookieManager cm = CookieManager.getInstance();
         cm.setAcceptCookie(true);
         cm.setAcceptThirdPartyCookies(webView, true);
@@ -200,8 +201,7 @@ public class MainActivity extends AppCompatActivity {
                 newWebView.setWebViewClient(new WebViewClient(){
                     @Override
                     public boolean shouldOverrideUrlLoading(WebView v, String url){
-                        handleUrl(url);
-                        return true;
+                        handleUrl(url); return true;
                     }
                 });
                 WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
@@ -248,10 +248,8 @@ public class MainActivity extends AppCompatActivity {
                         + "function toAscii(s){ var out=''; for(var i=0;i<s.length;i++){ var cp=s.codePointAt(i); if(cp>65535){i++;} if(cp>=0x1D400&&cp<=0x1D419) out+=String.fromCharCode(cp-0x1D400+65); else if(cp>=0x1D41A&&cp<=0x1D433) out+=String.fromCharCode(cp-0x1D41A+97); else if(cp>=0x1D5D4&&cp<=0x1D5ED) out+=String.fromCharCode(cp-0x1D5D4+65); else if(cp>=0x1D5EE&&cp<=0x1D607) out+=String.fromCharCode(cp-0x1D5EE+97); else if(cp>=0x1D670&&cp<=0x1D689) out+=String.fromCharCode(cp-0x1D670+65); else if(cp>=0x1D68A&&cp<=0x1D6A3) out+=String.fromCharCode(cp-0x1D68A+97); else if(cp>=0x1D7CE&&cp<=0x1D7D7) out+=String.fromCharCode(cp-0x1D7CE+48); else out+=s[i]; } return out; }"
                         + "function getLabel(el){ var t=''; var p=el; for(var i=0;i<10&&p;i++){ t+=(p.innerText||'')+' '+(p.textContent||'')+' '; p=p.parentElement; } return toAscii(t).toUpperCase(); }"
                         + "function getViewName(){ try{ var h=location.hash.replace(/^#/,''); var sp=new URLSearchParams(h); var v=sp.get('view')||sp.get('viewName')||''; if(v) return decodeURIComponent(v).toUpperCase(); }catch(e){} return ''; }"
-                        // NUEVO: EMBEBER POR VIEW NAME DINAMICO
-                        + "function embeber(){ try{ var MAPEOS=JSON.parse(window.AndroidQR.getMapeosJson()||'{}'); var viewName=getViewName(); if(!viewName) return; var urlEmbed=MAPEOS[viewName]; if(!urlEmbed){ for(var k in MAPEOS){ if(viewName.includes(k) || k.includes(viewName)){ urlEmbed=MAPEOS[k]; break; } } } if(!urlEmbed) return; var l=document.querySelector('a[href*=\"datastudio\"],a[href*=\"lookerstudio\"]'); if(l&&l.dataset.embed!='1'){ l.dataset.embed='1'; var c=l; for(var i=0;i<8&&c.parentElement;i++) c=c.parentElement; c.style.cssText='margin:0;padding:0;border:0;width:100%;height:calc(100vh - 56px);overflow:hidden;'; c.innerHTML='<div style=\"width:100%;height:100%;overflow:hidden;\"><iframe src=\"'+urlEmbed+'?rm=minimal\" style=\"width:100%;height:calc(100% + 20px);border:0;\"></iframe></div>'; } else if(!l){ var cont=document.querySelector('[data-testid=\"dashboard-view-container\"]')||document.querySelector('.dashboard-view')||document.querySelector('[role=\"main\"]'); if(cont && !document.getElementById('vexor-embed-'+viewName)){ var wrapper=document.createElement('div'); wrapper.id='vexor-embed-'+viewName; wrapper.style.cssText='margin:0;padding:0;border:0;width:100%;height:calc(100vh - 56px);overflow:hidden;'; wrapper.innerHTML='<div style=\"width:100%;height:100%;overflow:hidden;\"><iframe src=\"'+urlEmbed+'?rm=minimal\" style=\"width:100%;height:calc(100% + 20px);border:0;\"></iframe></div>'; cont.insertBefore(wrapper, cont.firstChild); } } }catch(e){} }"
-                        // NUEVO: PANEL LICENCIAS CON GESTION DE MAPEOS
-                        + "function inyectarPanelLicencias(){ var viewName=getViewName(); var hrefUpper=location.href.toUpperCase()+' '+viewName; var esLicencias = hrefUpper.includes('LICENCIAS') || hrefUpper.includes('LICENSES') || hrefUpper.includes('ESTADO%20PLAN') || hrefUpper.includes('ESTADO_PLAN'); var existing=document.getElementById('vexor-license-panel'); if(!esLicencias){ if(existing) existing.remove(); return; } if(existing) return; var target=document.querySelector('[data-testid=\"dashboard-view-container\"]') || document.querySelector('.dashboard-view') || document.body; var panel=document.createElement('div'); panel.id='vexor-license-panel'; panel.style.cssText='margin:12px;padding:16px;background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);border:1px solid #e6e6ef;font-family:sans-serif;'; try{ var MAPEOS=JSON.parse(window.AndroidQR.getMapeosJson()||'{}'); var htmlMapeos=''; var count=0; for(var k in MAPEOS){ count++; var shortUrl=MAPEOS[k]; if(shortUrl.length>30) shortUrl=shortUrl.substring(0,30)+'...'; htmlMapeos+='<div style=\"display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:11px;\"><b>'+k+'</b><span style=\"color:#8f6bc0;overflow:hidden;\">'+shortUrl+'</span></div>'; } if(count==0) htmlMapeos='<div style=\"padding:8px;color:#999;font-size:11px;text-align:center;\">No hay mapeos. Agrega tu primera vista.</div>'; panel.innerHTML=`<div style='text-align:center;margin-bottom:12px;'><div style='font-size:28px;'>🗺️</div><div style='font-weight:800;color:#8f6bc0;'>GESTIÓN DE MAPEOS POR VISTA</div><div style='color:#85859c;font-size:11px;'>Ilimitado - Cada vista su URL</div></div><div style='max-height:150px;overflow:auto;margin-bottom:12px;background:#f9f9ff;padding:8px;border-radius:8px;'>`+htmlMapeos+`</div><div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;'><button id='btn-mapeos' style='padding:14px 8px;border:none;border-radius:10px;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;font-weight:800;font-size:12px;'>🗺️<br>GESTIONAR MAPEOS</button><button id='btn-estado' style='padding:12px 8px;border:none;border-radius:10px;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;font-weight:700;font-size:12px;'>📊<br>ESTADO DE PLAN</button><button id='btn-activar' style='padding:12px 8px;border:none;border-radius:10px;background:#26263a;color:#fff;font-weight:700;font-size:12px;'>🔑<br>ACTIVAR PRO</button><button id='btn-comprar' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>💳<br>COMPRAR LICENCIA</button></div>`; }catch(e){ panel.innerHTML=`<div style='text-align:center;'><b>GESTIÓN DE LICENCIAS</b></div><button id='btn-mapeos'>GESTIONAR MAPEOS</button>`; } if(target===document.body){ document.body.insertBefore(panel, document.body.firstChild); } else { target.insertBefore(panel, target.firstChild); } setTimeout(function(){ var b0=document.getElementById('btn-mapeos'); if(b0) b0.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.gestionarMapeos(); }); var b1=document.getElementById('btn-estado'); if(b1) b1.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.estadoPlan(); }); var b2=document.getElementById('btn-activar'); if(b2) b2.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.activarPro(); }); var b3=document.getElementById('btn-comprar'); if(b3) b3.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.comprarLicencia(); }); }, 300);}"
+                        + "function embeber(){ try{ var MAPEOS=JSON.parse(window.AndroidQR.getMapeosJson()||'{}'); var viewName=getViewName(); if(!viewName) return; var urlEmbed=MAPEOS[viewName]; if(!urlEmbed){ for(var k in MAPEOS){ if(viewName.includes(k) || k.includes(viewName)){ urlEmbed=MAPEOS[k]; break; } } } if(!urlEmbed) return; var l=document.querySelector('a[href*=\"datastudio\"],a[href*=\"lookerstudio\"]'); if(l&&l.dataset.embed!='1'){ l.dataset.embed='1'; var c=l; for(var i=0;i<8&&c.parentElement;i++) c=c.parentElement; c.style.cssText='margin:0;padding:0;border:0;width:100%;height:calc(100vh - 56px);overflow:hidden;background:#fff;'; var finalUrl=urlEmbed; if(finalUrl.indexOf('rm=')==-1){ finalUrl+= (finalUrl.indexOf('?')>-1 ? '&' : '?') + 'rm=minimal'; } c.innerHTML='<div style=\"width:100%;height:100%;overflow:hidden;\"><iframe src=\"'+finalUrl+'\" style=\"width:100%;height:calc(100% + 20px);border:0;\" loading=\"eager\" allow=\"fullscreen\"></iframe></div>'; } else if(!l){ var cont=document.querySelector('[data-testid=\"dashboard-view-container\"]')||document.querySelector('.dashboard-view')||document.querySelector('[role=\"main\"]'); if(cont && !document.getElementById('vexor-embed-'+viewName)){ var finalUrl=urlEmbed; if(finalUrl.indexOf('rm=')==-1){ finalUrl+= (finalUrl.indexOf('?')>-1 ? '&' : '?') + 'rm=minimal'; } var wrapper=document.createElement('div'); wrapper.id='vexor-embed-'+viewName; wrapper.style.cssText='margin:0;padding:0;border:0;width:100%;height:calc(100vh - 56px);overflow:hidden;background:#fff;'; wrapper.innerHTML='<div style=\"width:100%;height:100%;overflow:hidden;\"><iframe src=\"'+finalUrl+'\" style=\"width:100%;height:calc(100% + 20px);border:0;\" loading=\"eager\" allow=\"fullscreen\"></iframe></div>'; cont.insertBefore(wrapper, cont.firstChild); } } }catch(e){} }"
+                        + "function inyectarPanelLicencias(){ var viewName=getViewName(); var hrefUpper=location.href.toUpperCase()+' '+viewName; var esLicencias = hrefUpper.includes('LICENCIAS') || hrefUpper.includes('LICENSES'); var existing=document.getElementById('vexor-license-panel'); if(!esLicencias){ if(existing) existing.remove(); return; } if(existing) return; var target=document.querySelector('[data-testid=\"dashboard-view-container\"]') || document.querySelector('.dashboard-view') || document.body; var panel=document.createElement('div'); panel.id='vexor-license-panel'; panel.style.cssText='margin:12px;padding:16px;background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);border:1px solid #e6e6ef;font-family:sans-serif;'; try{ var MAPEOS=JSON.parse(window.AndroidQR.getMapeosJson()||'{}'); var htmlMapeos=''; var count=0; for(var k in MAPEOS){ count++; var shortUrl=MAPEOS[k]; if(shortUrl.length>30) shortUrl=shortUrl.substring(0,30)+'...'; htmlMapeos+='<div style=\"display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:11px;\"><b>'+k+'</b><span style=\"color:#8f6bc0;overflow:hidden;\">'+shortUrl+'</span></div>'; } if(count==0) htmlMapeos='<div style=\"padding:8px;color:#999;font-size:11px;text-align:center;\">No hay mapeos. Agrega tu primera vista.</div>'; panel.innerHTML=`<div style='text-align:center;margin-bottom:12px;'><div style='font-size:28px;'>🗺️</div><div style='font-weight:800;color:#8f6bc0;'>GESTIÓN DE MAPEOS POR VISTA</div><div style='color:#85859c;font-size:11px;'>Ilimitado - Cada vista su URL</div></div><div style='max-height:150px;overflow:auto;margin-bottom:12px;background:#f9f9ff;padding:8px;border-radius:8px;'>`+htmlMapeos+`</div><div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;'><button id='btn-mapeos' style='padding:14px 8px;border:none;border-radius:10px;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;font-weight:800;font-size:12px;'>🗺️<br>GESTIONAR MAPEOS</button><button id='btn-estado' style='padding:12px 8px;border:none;border-radius:10px;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;font-weight:700;font-size:12px;'>📊<br>ESTADO DE PLAN</button><button id='btn-activar' style='padding:12px 8px;border:none;border-radius:10px;background:#26263a;color:#fff;font-weight:700;font-size:12px;'>🔑<br>ACTIVAR PRO</button><button id='btn-comprar' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>💳<br>COMPRAR LICENCIA</button><button id='btn-acceso' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>⭐<br>CREAR ACCESO DIRECTO</button></div>`; }catch(e){ panel.innerHTML=`<div style='text-align:center;'><b>GESTIÓN DE LICENCIAS</b></div><button id='btn-mapeos'>GESTIONAR MAPEOS</button>`; } if(target===document.body){ document.body.insertBefore(panel, document.body.firstChild); } else { target.insertBefore(panel, target.firstChild); } setTimeout(function(){ var b0=document.getElementById('btn-mapeos'); if(b0) b0.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.gestionarMapeos(); }); var b1=document.getElementById('btn-estado'); if(b1) b1.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.estadoPlan(); }); var b2=document.getElementById('btn-activar'); if(b2) b2.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.activarPro(); }); var b3=document.getElementById('btn-comprar'); if(b3) b3.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.comprarLicencia(); }); var b4=document.getElementById('btn-acceso'); if(b4) b4.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.crearAcceso(); }); }, 300);}"
                         + "var currentQrField = null;"
                         + "document.addEventListener('focusin',function(e){ var el=e.target; if(el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA') return; var label=getLabel(el); if(label.indexOf('QR')==-1){ if(currentQrField!==el){ try{window.AndroidQR.hideBtn();}catch(e){} currentQrField=null; } return; } currentQrField=el; if(!el.id) el.id='qr_'+Date.now(); try{window.AndroidQR.setId(el.id);}catch(e){} if(el.value.trim()==''){ try{window.AndroidQR.showBtn();}catch(e){} } else { try{window.AndroidQR.hideBtn();}catch(e){} } });"
                         + "document.addEventListener('focusout',function(e){ var el=e.target; if(el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA') return; setTimeout(function(){ var active=document.activeElement; var stillQr=false; if(active){ var label=getLabel(active); if(label.indexOf('QR')!=-1) stillQr=true; } if(!stillQr){ try{window.AndroidQR.hideBtn();}catch(err){} currentQrField=null; } },200); });"
@@ -289,7 +287,6 @@ public class MainActivity extends AppCompatActivity {
         webView.loadUrl(APPSHEET_URL);
     }
 
-    // NUEVO SISTEMA ILIMITADO POR VIEW NAME
     private void mostrarDialogGestionMapeosPorVista(){
         cargarMapeosPorVista();
         LinearLayout layout = new LinearLayout(this); layout.setOrientation(LinearLayout.VERTICAL); layout.setPadding(20,20,20,20);
@@ -319,7 +316,7 @@ public class MainActivity extends AppCompatActivity {
         layout.addView(lista);
         TextView sep = new TextView(this); sep.setText("\n--- AGREGAR NUEVO MAPEO ---"); sep.setTextColor(0xFF8f6bc0); sep.setPadding(0,16,0,8);
         layout.addView(sep);
-        EditText inputViewName = new EditText(this); inputViewName.setHint("VIEW NAME exacto (ej: TAVES 5, REPORTE, VENTAS LIMA)");
+        EditText inputViewName = new EditText(this); inputViewName.setHint("VIEW NAME exacto (ej: TAVES 5, REPORTE, Grafico)");
         EditText inputUrl = new EditText(this); inputUrl.setHint("URL EMBED https://lookerstudio.google.com/embed/...");
         layout.addView(inputViewName); layout.addView(inputUrl);
         new AlertDialog.Builder(this).setTitle("🗺️ GESTIONAR MAPEOS POR VISTA").setView(layout)
