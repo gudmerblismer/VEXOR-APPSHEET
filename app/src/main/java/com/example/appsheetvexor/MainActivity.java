@@ -47,6 +47,7 @@ import java.net.URL;
 import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class MainActivity extends AppCompatActivity {
@@ -62,7 +63,7 @@ public class MainActivity extends AppCompatActivity {
     private File tempAudioFile;
     private Bitmap selectedIconBitmap = null;
     private ImageView previewIconView;
-    private final String DATASTUDIO_URL = "https://datastudio.google.com/embed/reporting/a9a7f8c7-b820-4b17-9e6b-b6168d82d175/page/jfW6F";
+    // YA NO ES FIJO - AHORA ES DINAMICO POR VISTA
     private String APPSHEET_URL = "https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile";
     private final String GOOGLE_SHEET_API_URL = "https://script.google.com/macros/s/AKfycbxctlMwBkbUbq5M7yZ_objkvRx_AOmUOoZYz_KM5ItJ0GzGg1jxAhOFIfBas5QCnKKe/exec";
     private final String PAYPAL_LINK = "https://www.paypal.com/ncp/payment/4ADF32MFFTY2N";
@@ -75,6 +76,9 @@ public class MainActivity extends AppCompatActivity {
     private String deviceId = "";
     private int licenseMax = 1;
     private int licenseUsed = 1;
+    // NUEVO: MAPEOS POR VISTA - ILIMITADO
+    private SharedPreferences mapeosPrefs;
+    private JSONObject mapeosPorVista = new JSONObject();
 
     public class Bridge {
         @JavascriptInterface public void setId(String id){ lastQrId = id; }
@@ -88,6 +92,9 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface public void comprarLicencia(){ runOnUiThread(() -> { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(PAYPAL_LINK))); }); }
         @JavascriptInterface public void abrirPdf(String url){ runOnUiThread(() -> { if(url!=null && !url.isEmpty()) descargarPdfDeAppSheet(url); }); }
         @JavascriptInterface public void abrirUrl(String url){ runOnUiThread(() -> { if(url!=null && !url.isEmpty()) mostrarLinkEnVisor(url); }); }
+        // NUEVO PARA LICENCIAS
+        @JavascriptInterface public void gestionarMapeos(){ runOnUiThread(() -> mostrarDialogGestionMapeosPorVista()); }
+        @JavascriptInterface public String getMapeosJson(){ try{ return mapeosPorVista.toString(); }catch(Exception e){ return "{}"; } }
     }
 
     private boolean esUrlDeMiApp(String url){
@@ -95,7 +102,6 @@ public class MainActivity extends AppCompatActivity {
         if(url.equals(APPSHEET_URL)) return true;
         String base = APPSHEET_URL.split("\\?")[0];
         if(!base.isEmpty() && url.startsWith(base)) return true;
-        // Si es la misma app pero con otros parametros de vista, no embebas
         if(url.contains("/start/06effb1c-9afa-464d-9b0e-5db6e583136b")) return true;
         return false;
     }
@@ -117,6 +123,19 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void cargarMapeosPorVista(){
+        try{
+            String json = mapeosPrefs.getString("mapeos_vista_json", "{}");
+            mapeosPorVista = new JSONObject(json);
+            if(mapeosPorVista.length()==0){
+                mapeosPorVista.put("REPORTE", "https://datastudio.google.com/embed/reporting/89793a70-657b-4eb5-9155-afb47262f781/page/kkvzC");
+                mapeosPorVista.put("DATA STUDIO", "https://datastudio.google.com/embed/reporting/a9a7f8c7-b820-4b17-9e6b-b6168d82d175/page/jfW6F");
+                guardarMapeosPorVista();
+            }
+        }catch(Exception e){ mapeosPorVista = new JSONObject(); }
+    }
+    private void guardarMapeosPorVista(){ mapeosPrefs.edit().putString("mapeos_vista_json", mapeosPorVista.toString()).apply(); }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -125,6 +144,8 @@ public class MainActivity extends AppCompatActivity {
         webView = findViewById(R.id.webview);
         pdfOverlay = findViewById(R.id.pdfOverlay);
         pdfView = findViewById(R.id.pdfView);
+        mapeosPrefs = getSharedPreferences("VEXOR_MAPEOS_VISTA", MODE_PRIVATE);
+        cargarMapeosPorVista();
         String directUrl = getIntent().getStringExtra("direct_url");
         if(directUrl!= null &&!directUrl.isEmpty()){ APPSHEET_URL = directUrl; }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED)
@@ -150,15 +171,12 @@ public class MainActivity extends AppCompatActivity {
         cm.setAcceptThirdPartyCookies(pdfView, true);
         pdfView.setWebViewClient(new WebViewClient(){ @Override public boolean shouldOverrideUrlLoading(WebView view, String url){ view.loadUrl(url); return true; } });
         webView.addJavascriptInterface(new Bridge(), "AndroidQR");
-
-        // DESCARGA - AppSheet a veces abre PDF como descarga
         webView.setDownloadListener(new DownloadListener() {
             @Override
             public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
                 handleUrl(url);
             }
         });
-
         btnQr.setOnClickListener(v -> abrirScanner());
         TextView btnPdfMenu = findViewById(R.id.btnPdfMenu);
         btnPdfMenu.setOnClickListener(v -> {
@@ -229,9 +247,11 @@ public class MainActivity extends AppCompatActivity {
                         + "function hookAll(){ var links=document.querySelectorAll('a'); for(var i=0;i<links.length;i++) interceptLink(links[i]); }"
                         + "function toAscii(s){ var out=''; for(var i=0;i<s.length;i++){ var cp=s.codePointAt(i); if(cp>65535){i++;} if(cp>=0x1D400&&cp<=0x1D419) out+=String.fromCharCode(cp-0x1D400+65); else if(cp>=0x1D41A&&cp<=0x1D433) out+=String.fromCharCode(cp-0x1D41A+97); else if(cp>=0x1D5D4&&cp<=0x1D5ED) out+=String.fromCharCode(cp-0x1D5D4+65); else if(cp>=0x1D5EE&&cp<=0x1D607) out+=String.fromCharCode(cp-0x1D5EE+97); else if(cp>=0x1D670&&cp<=0x1D689) out+=String.fromCharCode(cp-0x1D670+65); else if(cp>=0x1D68A&&cp<=0x1D6A3) out+=String.fromCharCode(cp-0x1D68A+97); else if(cp>=0x1D7CE&&cp<=0x1D7D7) out+=String.fromCharCode(cp-0x1D7CE+48); else out+=s[i]; } return out; }"
                         + "function getLabel(el){ var t=''; var p=el; for(var i=0;i<10&&p;i++){ t+=(p.innerText||'')+' '+(p.textContent||'')+' '; p=p.parentElement; } return toAscii(t).toUpperCase(); }"
-                        + "function getViewName(){ try{ var h=location.hash.replace(/^#/,''); var sp=new URLSearchParams(h); var v=sp.get('view')||sp.get('viewName')||''; if(v) return v.toUpperCase(); }catch(e){} return ''; }"
-                        + "function embeber(){ var l=document.querySelector('a[href*=\"datastudio\"],a[href*=\"lookerstudio\"]'); if(l&&l.dataset.embed!='1'){ l.dataset.embed='1'; var c=l; for(var i=0;i<8&&c.parentElement;i++) c=c.parentElement; c.style.cssText='margin:0;padding:0;border:0;width:100%;height:calc(100vh - 56px);overflow:hidden;'; c.innerHTML='<div style=\"width:100%;height:100%;overflow:hidden;\"><iframe src=\"" + DATASTUDIO_URL + "\" style=\"width:100%;height:calc(100% + 20px);border:0;\"></iframe></div>'; } }"
-                        + "function inyectarPanelLicencias(){ var viewName=getViewName(); var hrefUpper=location.href.toUpperCase()+' '+viewName; var esLicencias = hrefUpper.includes('LICENCIAS') || hrefUpper.includes('LICENSES') || hrefUpper.includes('ESTADO%20PLAN') || hrefUpper.includes('ESTADO_PLAN'); var existing=document.getElementById('vexor-license-panel'); if(!esLicencias){ if(existing) existing.remove(); return; } if(existing) return; var target=document.querySelector('[data-testid=\"dashboard-view-container\"]') || document.querySelector('.dashboard-view') || document.body; var panel=document.createElement('div'); panel.id='vexor-license-panel'; panel.style.cssText='margin:12px;padding:16px;background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);border:1px solid #e6e6ef;font-family:sans-serif;'; panel.innerHTML=`<div style='text-align:center;margin-bottom:12px;'><div style='font-size:28px;'>📊</div><div style='font-weight:800;color:#8f6bc0;'>GESTIÓN DE LICENCIAS</div><div style='color:#85859c;font-size:11px;'>Administra tu app Vexor</div></div><div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;'><button id='btn-estado' style='padding:12px 8px;border:none;border-radius:10px;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;font-weight:700;font-size:12px;'>📊<br>ESTADO DE PLAN</button><button id='btn-activar' style='padding:12px 8px;border:none;border-radius:10px;background:#26263a;color:#fff;font-weight:700;font-size:12px;'>🔑<br>ACTIVAR PRO</button><button id='btn-comprar' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>💳<br>COMPRAR LICENCIA</button><button id='btn-acceso' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>⭐<br>CREAR ACCESO DIRECTO</button></div>`; if(target===document.body){ document.body.insertBefore(panel, document.body.firstChild); } else { target.insertBefore(panel, target.firstChild); } setTimeout(function(){ var b1=document.getElementById('btn-estado'); if(b1) b1.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.estadoPlan(); }); var b2=document.getElementById('btn-activar'); if(b2) b2.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.activarPro(); }); var b3=document.getElementById('btn-comprar'); if(b3) b3.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.comprarLicencia(); }); var b4=document.getElementById('btn-acceso'); if(b4) b4.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.crearAcceso(); }); }, 300);}"
+                        + "function getViewName(){ try{ var h=location.hash.replace(/^#/,''); var sp=new URLSearchParams(h); var v=sp.get('view')||sp.get('viewName')||''; if(v) return decodeURIComponent(v).toUpperCase(); }catch(e){} return ''; }"
+                        // EMBEBER POR VIEW NAME DINAMICO - CORREGIDO: siempre reemplaza el contenido del contenedor (innerHTML) y fuerza altura 100%, igual que en la version que funciona
+                        + "function embeber(){ try{ var MAPEOS=JSON.parse(window.AndroidQR.getMapeosJson()||'{}'); var viewName=getViewName(); if(!viewName) return; var urlEmbed=MAPEOS[viewName]; if(!urlEmbed){ for(var k in MAPEOS){ if(viewName.includes(k) || k.includes(viewName)){ urlEmbed=MAPEOS[k]; break; } } } if(!urlEmbed) return; var l=document.querySelector('a[href*=\"datastudio\"],a[href*=\"lookerstudio\"]'); if(l&&l.dataset.embed!='1'){ l.dataset.embed='1'; var c=l; for(var i=0;i<8&&c.parentElement;i++) c=c.parentElement; c.style.cssText='margin:0;padding:0;border:0;width:100%;height:calc(100vh - 56px);overflow:hidden;'; c.innerHTML='<div style=\"width:100%;height:100%;overflow:hidden;\"><iframe src=\"'+urlEmbed+'?rm=minimal\" style=\"width:100%;height:calc(100% + 20px);border:0;\"></iframe></div>'; } else if(!l){ var cont=document.querySelector('[data-testid=\"dashboard-view-container\"]')||document.querySelector('.dashboard-view')||document.querySelector('[role=\"main\"]')||document.body; if(cont.dataset.vexorEmbed!==viewName){ cont.dataset.vexorEmbed=viewName; cont.style.cssText='margin:0;padding:0;border:0;width:100%;height:calc(100vh - 56px);overflow:hidden;'; cont.innerHTML='<div style=\"width:100%;height:100%;overflow:hidden;\"><iframe src=\"'+urlEmbed+'?rm=minimal\" style=\"width:100%;height:calc(100% + 20px);border:0;\"></iframe></div>'; } } }catch(e){} }"
+                        // PANEL LICENCIAS CON GESTION DE MAPEOS
+                        + "function inyectarPanelLicencias(){ var viewName=getViewName(); var hrefUpper=location.href.toUpperCase()+' '+viewName; var esLicencias = hrefUpper.includes('LICENCIAS') || hrefUpper.includes('LICENSES') || hrefUpper.includes('ESTADO%20PLAN') || hrefUpper.includes('ESTADO_PLAN'); var existing=document.getElementById('vexor-license-panel'); if(!esLicencias){ if(existing) existing.remove(); return; } if(existing) return; var target=document.querySelector('[data-testid=\"dashboard-view-container\"]') || document.querySelector('.dashboard-view') || document.body; var panel=document.createElement('div'); panel.id='vexor-license-panel'; panel.style.cssText='margin:12px;padding:16px;background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);border:1px solid #e6e6ef;font-family:sans-serif;'; try{ var MAPEOS=JSON.parse(window.AndroidQR.getMapeosJson()||'{}'); var htmlMapeos=''; var count=0; for(var k in MAPEOS){ count++; var shortUrl=MAPEOS[k]; if(shortUrl.length>30) shortUrl=shortUrl.substring(0,30)+'...'; htmlMapeos+='<div style=\"display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:11px;\"><b>'+k+'</b><span style=\"color:#8f6bc0;overflow:hidden;\">'+shortUrl+'</span></div>'; } if(count==0) htmlMapeos='<div style=\"padding:8px;color:#999;font-size:11px;text-align:center;\">No hay mapeos. Agrega tu primera vista.</div>'; panel.innerHTML=`<div style='text-align:center;margin-bottom:12px;'><div style='font-size:28px;'>🗺️</div><div style='font-weight:800;color:#8f6bc0;'>GESTIÓN DE MAPEOS POR VISTA</div><div style='color:#85859c;font-size:11px;'>Ilimitado - Cada vista su URL</div></div><div style='max-height:150px;overflow:auto;margin-bottom:12px;background:#f9f9ff;padding:8px;border-radius:8px;'>`+htmlMapeos+`</div><div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;'><button id='btn-mapeos' style='padding:14px 8px;border:none;border-radius:10px;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;font-weight:800;font-size:12px;'>🗺️<br>GESTIONAR MAPEOS</button><button id='btn-estado' style='padding:12px 8px;border:none;border-radius:10px;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;font-weight:700;font-size:12px;'>📊<br>ESTADO DE PLAN</button><button id='btn-activar' style='padding:12px 8px;border:none;border-radius:10px;background:#26263a;color:#fff;font-weight:700;font-size:12px;'>🔑<br>ACTIVAR PRO</button><button id='btn-comprar' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>💳<br>COMPRAR LICENCIA</button></div>`; }catch(e){ panel.innerHTML=`<div style='text-align:center;'><b>GESTIÓN DE LICENCIAS</b></div><button id='btn-mapeos'>GESTIONAR MAPEOS</button>`; } if(target===document.body){ document.body.insertBefore(panel, document.body.firstChild); } else { target.insertBefore(panel, target.firstChild); } setTimeout(function(){ var b0=document.getElementById('btn-mapeos'); if(b0) b0.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.gestionarMapeos(); }); var b1=document.getElementById('btn-estado'); if(b1) b1.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.estadoPlan(); }); var b2=document.getElementById('btn-activar'); if(b2) b2.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.activarPro(); }); var b3=document.getElementById('btn-comprar'); if(b3) b3.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.comprarLicencia(); }); }, 300);}"
                         + "var currentQrField = null;"
                         + "document.addEventListener('focusin',function(e){ var el=e.target; if(el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA') return; var label=getLabel(el); if(label.indexOf('QR')==-1){ if(currentQrField!==el){ try{window.AndroidQR.hideBtn();}catch(e){} currentQrField=null; } return; } currentQrField=el; if(!el.id) el.id='qr_'+Date.now(); try{window.AndroidQR.setId(el.id);}catch(e){} if(el.value.trim()==''){ try{window.AndroidQR.showBtn();}catch(e){} } else { try{window.AndroidQR.hideBtn();}catch(e){} } });"
                         + "document.addEventListener('focusout',function(e){ var el=e.target; if(el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA') return; setTimeout(function(){ var active=document.activeElement; var stillQr=false; if(active){ var label=getLabel(active); if(label.indexOf('QR')!=-1) stillQr=true; } if(!stillQr){ try{window.AndroidQR.hideBtn();}catch(err){} currentQrField=null; } },200); });"
@@ -267,6 +287,69 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         webView.loadUrl(APPSHEET_URL);
+    }
+
+    // NUEVO SISTEMA ILIMITADO POR VIEW NAME
+    private void mostrarDialogGestionMapeosPorVista(){
+        cargarMapeosPorVista();
+        LinearLayout layout = new LinearLayout(this); layout.setOrientation(LinearLayout.VERTICAL); layout.setPadding(20,20,20,20);
+        TextView titulo = new TextView(this); titulo.setText("🗺️ MAPEOS POR VISTA - ILIMITADO"); titulo.setTextSize(15); titulo.setTextColor(0xFF8f6bc0); titulo.setPadding(0,0,0,12);
+        layout.addView(titulo);
+        LinearLayout lista = new LinearLayout(this); lista.setOrientation(LinearLayout.VERTICAL);
+        try{
+            JSONArray keys = mapeosPorVista.names();
+            if(keys!=null){
+                for(int i=0;i<keys.length();i++){
+                    String viewName = keys.getString(i);
+                    String url = mapeosPorVista.getString(viewName);
+                    LinearLayout fila = new LinearLayout(this); fila.setOrientation(LinearLayout.HORIZONTAL); fila.setPadding(12,12,12,12);
+                    fila.setBackgroundResource(android.R.drawable.dialog_holo_light_frame);
+                    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT); lp.setMargins(0,0,0,8); fila.setLayoutParams(lp);
+                    TextView tv = new TextView(this); tv.setText(viewName + "\n" + url.substring(0, Math.min(40, url.length())) + "...");
+                    tv.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)); tv.setTextSize(11);
+                    Button btnEdit = new Button(this); btnEdit.setText("✏️");
+                    btnEdit.setOnClickListener(v -> mostrarDialogAddEditPorVista(viewName, url));
+                    Button btnDel = new Button(this); btnDel.setText("🗑️");
+                    btnDel.setOnClickListener(v -> confirmarEliminarPorVista(viewName));
+                    fila.addView(tv); fila.addView(btnEdit); fila.addView(btnDel);
+                    lista.addView(fila);
+                }
+            }
+        }catch(Exception e){}
+        layout.addView(lista);
+        TextView sep = new TextView(this); sep.setText("\n--- AGREGAR NUEVO MAPEO ---"); sep.setTextColor(0xFF8f6bc0); sep.setPadding(0,16,0,8);
+        layout.addView(sep);
+        EditText inputViewName = new EditText(this); inputViewName.setHint("VIEW NAME exacto (ej: TAVES 5, REPORTE, VENTAS LIMA)");
+        EditText inputUrl = new EditText(this); inputUrl.setHint("URL EMBED https://lookerstudio.google.com/embed/...");
+        layout.addView(inputViewName); layout.addView(inputUrl);
+        new AlertDialog.Builder(this).setTitle("🗺️ GESTIONAR MAPEOS POR VISTA").setView(layout)
+                .setPositiveButton("➕ AGREGAR", (d,w) -> {
+                    String vn = inputViewName.getText().toString().trim().toUpperCase();
+                    String u = inputUrl.getText().toString().trim();
+                    if(vn.isEmpty() || u.isEmpty()){ Toast.makeText(this, "Completa VIEW NAME y URL", Toast.LENGTH_SHORT).show(); return; }
+                    try{ mapeosPorVista.put(vn, u); guardarMapeosPorVista(); Toast.makeText(this, "✅ Guardado para vista " + vn, Toast.LENGTH_LONG).show(); webView.reload(); }catch(Exception e){}
+                })
+                .setNegativeButton("Cerrar", null).show();
+    }
+
+    private void mostrarDialogAddEditPorVista(String viewNameActual, String urlActual){
+        LinearLayout layout = new LinearLayout(this); layout.setOrientation(LinearLayout.VERTICAL); layout.setPadding(40,40,40,40);
+        EditText inputViewName = new EditText(this); inputViewName.setText(viewNameActual); inputViewName.setHint("VIEW NAME");
+        EditText inputUrl = new EditText(this); inputUrl.setText(urlActual); inputUrl.setHint("URL EMBED");
+        layout.addView(inputViewName); layout.addView(inputUrl);
+        new AlertDialog.Builder(this).setTitle("✏️ EDITAR MAPEO").setView(layout)
+                .setPositiveButton("GUARDAR", (d,w) -> {
+                    String vnNuevo = inputViewName.getText().toString().trim().toUpperCase();
+                    String uNuevo = inputUrl.getText().toString().trim();
+                    try{ if(!vnNuevo.equals(viewNameActual)) mapeosPorVista.remove(viewNameActual); mapeosPorVista.put(vnNuevo, uNuevo); guardarMapeosPorVista(); Toast.makeText(this, "✅ Actualizado", Toast.LENGTH_SHORT).show(); webView.reload(); }catch(Exception e){}
+                })
+                .setNegativeButton("Cancelar", null).show();
+    }
+
+    private void confirmarEliminarPorVista(String viewName){
+        new AlertDialog.Builder(this).setTitle("¿Eliminar?").setMessage("¿Borrar mapeo de vista " + viewName + "?")
+                .setPositiveButton("🗑️ ELIMINAR", (d,w) -> { mapeosPorVista.remove(viewName); guardarMapeosPorVista(); Toast.makeText(this, "🗑️ Eliminado", Toast.LENGTH_SHORT).show(); webView.reload(); })
+                .setNegativeButton("Cancelar", null).show();
     }
 
     private void initVexorLicensing(){
