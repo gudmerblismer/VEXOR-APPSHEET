@@ -10,13 +10,13 @@ import android.content.pm.ShortcutManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.Icon;
+import android.media.MediaDrm;
 import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Message;
 import android.provider.MediaStore;
-import android.provider.Settings;
 import android.util.Base64;
 import android.view.View;
 import android.webkit.CookieManager;
@@ -46,6 +46,7 @@ import java.net.URL;
 import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.UUID;
 import org.json.JSONObject;
 
 public class MainActivity extends AppCompatActivity {
@@ -62,10 +63,7 @@ public class MainActivity extends AppCompatActivity {
     private Bitmap selectedIconBitmap = null;
     private ImageView previewIconView;
     private String APPSHEET_URL = "https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile";
-
-    // ESTA LINEA LA REEMPLAZA AUTOMATICAMENTE EL build.apk.yml CON LOS MAPEOS DE TU PAGINA WEB
     private static final String MAPEOS_FIJOS_JSON = "{\"DATA STUDIO\":\"https://datastudio.google.com/embed/reporting/a9a7f8c7-b820-4b17-9e6b-b6168d82d175/page/jfW6F\"}";
-
     private final String GOOGLE_SHEET_API_URL = "https://script.google.com/macros/s/AKfycbxctlMwBkbUbq5M7yZ_objkvRx_AOmUOoZYz_KM5ItJ0GzGg1jxAhOFIfBas5QCnKKe/exec";
     private final String PAYPAL_LINK = "https://www.paypal.com/ncp/payment/4ADF32MFFTY2N";
     private boolean isLicensed = false;
@@ -127,7 +125,6 @@ public class MainActivity extends AppCompatActivity {
             try{ mapeosPorVista = new JSONObject(MAPEOS_FIJOS_JSON); }catch(Exception ee){ mapeosPorVista = new JSONObject(); }
         }
     }
-    private void guardarMapeosPorVista(){ mapeosPrefs.edit().putString("mapeos_vista_json", mapeosPorVista.toString()).apply(); }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -256,15 +253,49 @@ public class MainActivity extends AppCompatActivity {
         if(trialExpiresAt==0){ trialExpiresAt = System.currentTimeMillis() + 30L*24*60*60*1000; prefs.edit().putLong("vexor_trial_expires", trialExpiresAt).putBoolean("vexor_trial_allowed", true).putBoolean("vexor_trial_active", true).apply(); }
         recalcularTrial(); new Thread(() -> syncTrialWithSheet()).start();
     }
+
+    // UNICO POR CELULAR - WIDEVINE + ARCHIVO PERSISTENTE EN DOCUMENTS
     private String generarDeviceId(){
         try{
-            String androidId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
-            String raw = android.os.Build.MODEL + "||" + android.os.Build.MANUFACTURER + "||" + androidId + "||" + getPackageName();
-            MessageDigest md = MessageDigest.getInstance("SHA-256"); byte[] hash = md.digest(raw.getBytes("UTF-8"));
-            StringBuilder sb = new StringBuilder(); for(byte b: hash){ sb.append(String.format("%02x", b)); }
-            return "DEV-" + sb.toString().substring(0,16).toUpperCase();
-        }catch(Exception e){ return "DEV-" + System.currentTimeMillis(); }
+            File f = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), ".vexor_core");
+            if(f.exists()){
+                BufferedReader br = new BufferedReader(new FileReader(f));
+                String saved = br.readLine(); br.close();
+                if(saved != null && saved.startsWith("DEV-") && saved.length() >= 12) return saved.trim();
+            }
+        }catch(Exception e){}
+        try{
+            UUID WIDEVINE_UUID = new UUID(0xEDEF8BA979D64ACEL, 0xA3C827DCD51D21EDL);
+            MediaDrm drm = new MediaDrm(WIDEVINE_UUID);
+            byte[] widevineId = drm.getPropertyByteArray(MediaDrm.PROPERTY_DEVICE_UNIQUE_ID);
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(widevineId);
+            StringBuilder sb = new StringBuilder();
+            for(byte b: hash){ sb.append(String.format("%02x", b)); }
+            String newId = "DEV-" + sb.toString().substring(0,16).toUpperCase();
+            drm.release();
+            try{
+                File f = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), ".vexor_core");
+                FileWriter fw = new FileWriter(f, false); fw.write(newId); fw.close();
+            }catch(Exception e){}
+            return newId;
+        }catch(Exception e){
+            try{
+                String raw = android.os.Build.FINGERPRINT + "||" + android.os.Build.BOARD + "||" + android.os.Build.MANUFACTURER + "||" + android.os.Build.MODEL + "||" + android.os.Build.DEVICE;
+                MessageDigest md = MessageDigest.getInstance("SHA-256");
+                byte[] hash = md.digest(raw.getBytes("UTF-8"));
+                StringBuilder sb = new StringBuilder();
+                for(byte b: hash){ sb.append(String.format("%02x", b)); }
+                String fallbackId = "DEV-" + sb.toString().substring(0,16).toUpperCase();
+                try{
+                    File f = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), ".vexor_core");
+                    FileWriter fw = new FileWriter(f, false); fw.write(fallbackId); fw.close();
+                }catch(Exception ee){}
+                return fallbackId;
+            }catch(Exception ee){ return "DEV-" + System.currentTimeMillis(); }
+        }
     }
+
     private void recalcularTrial(){
         SharedPreferences prefs = getSharedPreferences("VEXOR_PREFS", MODE_PRIVATE);
         long now = System.currentTimeMillis(); long diff = trialExpiresAt - now;
