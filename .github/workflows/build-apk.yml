@@ -40,24 +40,26 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Procesar datos - ID UNICO POR APP + URL + MAPEOS FIJOS ILIMITADOS
+      - name: Procesar datos - ID UNICO + MAPEOS FIJOS ESCAPADOS CORRECTAMENTE
+        env:
+          INPUT_APPNAME: ${{ github.event.inputs.appName || github.event.client_payload.appName || 'NEXO' }}
+          INPUT_APPURL: ${{ github.event.inputs.appUrl || github.event.client_payload.appUrl }}
+          INPUT_ICON: ${{ github.event.inputs.iconBase64 || github.event.client_payload.iconBase64 }}
+          INPUT_MAPEOS: ${{ github.event.inputs.mapeosJson || github.event.client_payload.mapeosJson || '{}' }}
         run: |
-          APP_NAME="${{ github.event.inputs.appName || github.event.client_payload.appName || 'NEXO' }}"
-          APP_URL="${{ github.event.inputs.appUrl || github.event.client_payload.appUrl }}"
-          ICON_B64="${{ github.event.inputs.iconBase64 || github.event.client_payload.iconBase64 }}"
-          MAPEOS_JSON_RAW='${{ github.event.inputs.mapeosJson || github.event.client_payload.mapeosJson || '{}' }}'
+          APP_NAME="$INPUT_APPNAME"
+          APP_URL="$INPUT_APPURL"
+          ICON_B64="$INPUT_ICON"
+          MAPEOS_JSON_RAW="$INPUT_MAPEOS"
           
-          # Si viene vacio poner uno por defecto
-          if [ -z "$MAPEOS_JSON_RAW" ] || [ "$MAPEOS_JSON_RAW" = "" ]; then
+          if [ -z "$MAPEOS_JSON_RAW" ] || [ "$MAPEOS_JSON_RAW" = "" ] || [ "$MAPEOS_JSON_RAW" = "{}" ]; then
             MAPEOS_JSON_RAW='{"DATA STUDIO":"https://datastudio.google.com/embed/reporting/a9a7f8c7-b820-4b17-9e6b-b6168d82d175/page/jfW6F"}'
           fi
           
-          echo "=== DATOS RECIBIDOS ==="
-          echo "APP_NAME: $APP_NAME"
-          echo "APP_URL: $APP_URL"
-          echo "MAPEOS_JSON_RAW: $MAPEOS_JSON_RAW"
+          echo "APP_NAME=$APP_NAME"
+          echo "APP_URL=$APP_URL"
+          echo "MAPEOS_JSON_RAW=$MAPEOS_JSON_RAW"
           
-          # Hash corto de la URL para diferenciar apps con mismo nombre pero diferente URL
           URL_HASH=$(echo -n "$APP_URL" | md5sum | cut -c1-6)
           SANITIZED=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '_' | sed 's/^_*//;s/_*$//' | cut -c1-15)
           if [ -z "$SANITIZED" ]; then SANITIZED="app"; fi
@@ -68,7 +70,6 @@ jobs:
           echo "APP_ID=$APP_ID" >> $GITHUB_ENV
           echo "URL_HASH=$URL_HASH" >> $GITHUB_ENV
           echo "MAPEOS_JSON_RAW=$MAPEOS_JSON_RAW" >> $GITHUB_ENV
-          echo "Generando APP_ID: $APP_ID para APP: $APP_NAME con URL: $APP_URL"
 
           if [ -f "app/src/main/res/values/strings.xml" ]; then
             sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$APP_NAME</string>|g" app/src/main/res/values/strings.xml
@@ -94,36 +95,45 @@ jobs:
             cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp app/src/main/res/mipmap-xhdpi/ic_launcher_round.webp
           fi
 
-          # === INYECCION DE MAPEOS FIJOS ILIMITADOS ===
-          echo "=== INYECTANDO MAPEOS FIJOS ==="
+          # === INYECCION DE MAPEOS FIJOS CON PYTHON (CORREGIDO) ===
           MAIN_FILE="app/src/main/java/com/example/appsheetvexor/MainActivity.java"
-          if [ -f "$MAIN_FILE" ]; then
-            # Usar Python para escapar correctamente el JSON para Java
-            MAPEOS_ESCAPED=$(python3 -c "
-          import json, sys
-          raw = '''$MAPEOS_JSON_RAW'''
+          echo "Inyectando mapeos en $MAIN_FILE"
+          
+          python3 << 'PYEOF'
+          import json, os, re
+          raw = os.environ.get('INPUT_MAPEOS', '{}')
+          main_file = "app/src/main/java/com/example/appsheetvexor/MainActivity.java"
+          print(f"RAW INPUT: {raw}")
           try:
               obj = json.loads(raw)
-              json_str = json.dumps(obj)
-              # Escapar comillas para Java string
-              escaped = json_str.replace('\"', '\\\\\"')
-              print(escaped)
+              print(f"OBJ PARSEADO: {obj}")
           except Exception as e:
-              print('{\\\"DATA STUDIO\\\":\\\"https://datastudio.google.com/embed/reporting/a9a7f8c7-b820-4b17-9e6b-b6168d82d175/page/jfW6F\\\"}')
-          ")
-            echo "MAPEOS_ESCAPED: $MAPEOS_ESCAPED"
-            
-            # Reemplazar la linea completa de MAPEOS_FIJOS_JSON
-            # Metodo 1: sed directo
-            sed -i "s|private static final String MAPEOS_FIJOS_JSON = \".*\";|private static final String MAPEOS_FIJOS_JSON = \"$MAPEOS_ESCAPED\";|g" "$MAIN_FILE"
-            
-            echo "MAPEOS inyectados correctamente"
-            grep -n "MAPEOS_FIJOS_JSON" "$MAIN_FILE" || echo "No se encontro la linea, verificando..."
-          else
-            echo "No se encontro MainActivity.java en $MAIN_FILE"
-          fi
+              print(f"Error parseando JSON, usando default: {e}")
+              obj = {"DATA STUDIO": "https://datastudio.google.com/embed/reporting/a9a7f8c7-b820-4b17-9e6b-b6168d82d175/page/jfW6F"}
+          
+          json_str = json.dumps(obj, ensure_ascii=False)
+          print(f"JSON_STR: {json_str}")
+          java_escaped = json_str.replace('"', '\\"')
+          print(f"JAVA_ESCAPED: {java_escaped}")
+          
+          with open(main_file, 'r', encoding='utf-8') as f:
+              content = f.read()
+          
+          # Reemplazo seguro con regex
+          new_line = f'private static final String MAPEOS_FIJOS_JSON = "{java_escaped}";'
+          content_new = re.sub(r'private static final String MAPEOS_FIJOS_JSON = ".*?";', new_line, content, flags=re.DOTALL)
+          
+          with open(main_file, 'w', encoding='utf-8') as f:
+              f.write(content_new)
+          
+          print("=== LINEA FINAL ===")
+          with open(main_file, 'r', encoding='utf-8') as f:
+              for line in f:
+                  if "MAPEOS_FIJOS_JSON" in line:
+                      print(line.strip())
+          PYEOF
 
-          # Reemplazar AppSheet URL en todos los archivos
+          # Reemplazar AppSheet URL
           find app/src/main -type f \( -name "*.kt" -o -name "*.java" \) | xargs grep -l "appsheet.com" 2>/dev/null | while read f; do
             sed -i "s|https://www.appsheet.com/start/[^\"']*|$APP_URL|g" "$f"
           done
@@ -153,7 +163,6 @@ jobs:
             Mapeos: ${{ env.MAPEOS_JSON_RAW }}
             Hash URL: ${{ env.URL_HASH }}
             Build: ${{ github.run_number }}
-            Ahora soporta mapeos fijos ilimitados dentro del codigo
           files: ${{ env.APK_FILE }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
