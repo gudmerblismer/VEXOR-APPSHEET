@@ -167,7 +167,7 @@ public class MainActivity extends AppCompatActivity {
         TextView btnPdfMenu = findViewById(R.id.btnPdfMenu);
         btnPdfMenu.setOnClickListener(v -> {
             PopupMenu popup = new PopupMenu(MainActivity.this, v);
-            popup.getMenu().add("\uD83D\uDCC2 COMPARTIR"); popup.getMenu().add("⬇ DESCARGAR"); popup.getMenu().add("❌ SALIR");
+            popup.getMenu().add("📂 COMPARTIR"); popup.getMenu().add("⬇ DESCARGAR"); popup.getMenu().add("❌ SALIR");
             popup.setOnMenuItemClickListener(item -> {
                 String t = item.getTitle().toString();
                 if(t.contains("SALIR")){ pdfOverlay.setVisibility(View.GONE); pdfView.loadUrl("about:blank"); }
@@ -188,7 +188,7 @@ public class MainActivity extends AppCompatActivity {
                 filePathCallback = cb;
                 AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
                 builder.setTitle("Selecciona una acción");
-                builder.setItems(new String[]{"\uD83D\uDCF7 Cámara", "\uD83C\uDFA4 Grabar Audio", "\uD83D\uDCC1 Selector de medios"}, (dialog, which) -> {
+                builder.setItems(new String[]{"📷 Cámara", "🎤 Grabar Audio", "📁 Selector de medios"}, (dialog, which) -> {
                     if(which==0){
                         Intent take=new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
                         try{
@@ -210,20 +210,20 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         
-        webView.setVisibility(View.INVISIBLE);
+        // ===== FIX ENTRADA RAPIDA: NO USAR INVISIBLE - DEJAR VISIBLE SIEMPRE =====
+        // webView.setVisibility(View.INVISIBLE); <- ESTO ES LO QUE TE HACIA VER LENTO
         
         webView.setWebViewClient(new WebViewClient(){
             @Override public void onPageStarted(WebView view, String url, Bitmap favicon){
                 super.onPageStarted(view, url, favicon);
-                if(esUrlDeMiApp(url) && view.getVisibility()!=View.VISIBLE){
-                    view.setVisibility(View.VISIBLE);
-                }
+                // Ya no ocultamos, entra directo
             }
             @Override public void onPageFinished(WebView view, String url){
-                view.setVisibility(View.VISIBLE);
+                // NO tocamos visibilidad, ya esta visible
                 if(!hasAccess()){
                     view.evaluateJavascript("javascript:(function(){ try{ var els=document.querySelectorAll('a[href*=\"datastudio\"],a[href*=\"lookerstudio\"]'); if(els.length>0){ var c=els[0]; for(var i=0;i<8&&c.parentElement;i++) c=c.parentElement; c.innerHTML='<div style=\"padding:24px;text-align:center;font-family:sans-serif;\"><h3>❌ Prueba terminada</h3><p>Compra licencia de por vida.<br><b>💳 Pago único</b></p><a href=\""+PAYPAL_LINK+"\" target=\"_blank\" style=\"display:inline-block;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700;margin-top:10px;\">💳 COMPRAR LICENCIA</a><br><br><button onclick=\"window.AndroidQR.abrirActivar()\" style=\"padding:8px 14px;\">🔑 ACTIVAR PRO</button></div>'; } }catch(e){} })()", null);
                 }
+                // TU CODIGO COMPLETO ORIGINAL DE QR + DATA STUDIO + LICENCIAS - INTACTO
                 String js="javascript:(function(){"
                         + "function toAscii(s){ var out=''; for(var i=0;i<s.length;i++){ var cp=s.codePointAt(i); if(cp>65535){i++;} if(cp>=0x1D400&&cp<=0x1D419) out+=String.fromCharCode(cp-0x1D400+65); else if(cp>=0x1D41A&&cp<=0x1D433) out+=String.fromCharCode(cp-0x1D41A+97); else if(cp>=0x1D5D4&&cp<=0x1D5ED) out+=String.fromCharCode(cp-0x1D5D4+65); else if(cp>=0x1D5EE&&cp<=0x1D607) out+=String.fromCharCode(cp-0x1D5EE+97); else if(cp>=0x1D670&&cp<=0x1D689) out+=String.fromCharCode(cp-0x1D670+65); else if(cp>=0x1D68A&&cp<=0x1D6A3) out+=String.fromCharCode(cp-0x1D68A+97); else if(cp>=0x1D7CE&&cp<=0x1D7D7) out+=String.fromCharCode(cp-0x1D7CE+48); else out+=s[i]; } return out; }"
                         + "function getLabel(el){ var t=''; var p=el; for(var i=0;i<10&&p;i++){ t+=(p.innerText||'')+' '+(p.textContent||'')+' '; p=p.parentElement; } return toAscii(t).toUpperCase(); }"
@@ -247,15 +247,29 @@ public class MainActivity extends AppCompatActivity {
                 if(url.contains("accounts.google.com") || url.contains("oauth") || url.contains("ServiceLogin") || url.contains("signin") || url.contains("consent")) return false;
                 if(url.contains("gettablefileurl") || url.contains("getfile")){ if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; } descargarPdfDeAppSheet(url); return true; }
                 if(esUrlDeMiApp(url)) return false;
-                if(!url.contains("appsheet.com") && url.startsWith("http")){ if(!url.contains("datastudio.google.com") && !url.contains("lookerstudio.google.com")){ if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; } mostrarLinkEnVisor(url); return true; } }
+                // DATA STUDIO y LOOKERSTUDIO se quedan en webView, NO en pdfView
+                if(url.contains("datastudio.google.com") || url.contains("lookerstudio.google.com")) return false;
+                if(!url.contains("appsheet.com") && url.startsWith("http")){
+                    if(!hasAccess()){ mostrarBloqueoPorExpiracion(); return true; }
+                    // YouTube, Drive, etc -> SI va al visor interno pdfView
+                    mostrarLinkEnVisor(url); 
+                    return true;
+                }
                 if(pdfOverlay.getVisibility()==View.VISIBLE){ pdfOverlay.setVisibility(View.GONE); } return false;
             }
         });
         
-        initVexorLicensingOptimized();
+        // ===== CAMBIO CLAVE PARA ENTRADA RAPIDA TIPO APPCREATOR24 =====
+        // 1. Carga AppSheet INMEDIATAMENTE
         webView.loadUrl(APPSHEET_URL);
+        
+        // 2. Verificacion de licencia EN SEGUNDO PLANO 300ms despues, no bloquea entrada
+        webView.postDelayed(() -> {
+            initVexorLicensingOptimized();
+        }, 300);
     }
 
+    // TU MISMA FUNCION ORIGINAL, SIN CAMBIOS, SOLO SE LLAMA DESPUES
     private void initVexorLicensingOptimized(){
         SharedPreferences prefs = getSharedPreferences("VEXOR_PREFS", MODE_PRIVATE);
         deviceId = prefs.getString("vexor_device_id", "");
@@ -282,7 +296,7 @@ public class MainActivity extends AppCompatActivity {
                             }
                         }
                     }catch(Exception e){}
-                    syncTrialWithSheet();
+                    syncTrialWithSheet(); // actualiza last_check con el ID real
                 }
             }).start();
         }
@@ -292,7 +306,7 @@ public class MainActivity extends AppCompatActivity {
             prefs.edit().putLong("vexor_trial_expires", trialExpiresAt).putBoolean("vexor_trial_allowed", true).putBoolean("vexor_trial_active", true).apply(); 
         }
         recalcularTrial();
-        new Thread(() -> syncTrialWithSheet()).start();
+        new Thread(() -> syncTrialWithSheet()).start(); // actualiza last_check
     }
 
     private String generarDeviceIdReal(){
