@@ -64,19 +64,20 @@ public class MainActivity extends AppCompatActivity {
     private ImageView previewIconView;
     private String APPSHEET_URL = "https://www.appsheet.com/start/06effb1c-9afa-464d-9b0e-5db6e583136b?platform=mobile";
     private static final String MAPEOS_FIJOS_JSON = "{\"DATA STUDIO\":\"https://datastudio.google.com/embed/reporting/a9a7f8c7-b820-4b17-9e6b-b6168d82d175/page/jfW6F\"}";
-    private final String GOOGLE_SHEET_API_URL = "https://script.google.com/macros/s/AKfycbxctlMwBkbUbq5M7yZ_objkvRx_AOmUOoZYz_KM5ItJ0GzGg1jxAhOFIfBas5QCnKKe/exec";
+    private final String GOOGLE_SHEET_API_URL = "https://script.google.com/macros/s/AKfycbxctlMwBkbUbq5M7yZ_objkvRx_AOmUOoZYz_KM5ItJ0GzGg1jxAhOFIfBas5QCnKe/exec";
     private final String PAYPAL_LINK = "https://www.paypal.com/ncp/payment/4ADF32MFFTY2N";
     private boolean isLicensed = false;
     private String licensePlan = "";
     private long trialExpiresAt = 0;
-    private boolean trialAllowed = false;
-    private boolean trialActive = false;
-    private int trialDaysLeft = 0;
+    private boolean trialAllowed = true; // INICIA EN TRUE PARA ENTRAR RAPIDO COMO APPCREATOR24
+    private boolean trialActive = true;  // INICIA EN TRUE
+    private int trialDaysLeft = 30;
     private String deviceId = "";
     private int licenseMax = 1;
     private int licenseUsed = 1;
     private SharedPreferences mapeosPrefs;
     private JSONObject mapeosPorVista = new JSONObject();
+    private View splashView;
 
     public class Bridge {
         @JavascriptInterface public void setId(String id){ lastQrId = id; }
@@ -120,7 +121,7 @@ public class MainActivity extends AppCompatActivity {
     private void cargarMapeosPorVista(){
         try{
             mapeosPorVista = new JSONObject(MAPEOS_FIJOS_JSON);
-            mapeosPrefs.edit().putString("mapeos_vista_json", mapeosPorVista.toString()).apply();
+            if(mapeosPrefs!=null) mapeosPrefs.edit().putString("mapeos_vista_json", mapeosPorVista.toString()).apply();
         }catch(Exception e){ 
             try{ mapeosPorVista = new JSONObject(MAPEOS_FIJOS_JSON); }catch(Exception ee){ mapeosPorVista = new JSONObject(); }
         }
@@ -130,52 +131,54 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        
         btnQr = findViewById(R.id.btnQr);
         webView = findViewById(R.id.webview);
         pdfOverlay = findViewById(R.id.pdfOverlay);
         pdfView = findViewById(R.id.pdfView);
+        splashView = findViewById(R.id.splashView); // Si no tienes splash, ignora
         mapeosPrefs = getSharedPreferences("VEXOR_MAPEOS_VISTA", MODE_PRIVATE);
-        cargarMapeosPorVista();
+        
         String directUrl = getIntent().getStringExtra("direct_url");
         if(directUrl!= null &&!directUrl.isEmpty()){ APPSHEET_URL = directUrl; }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED)
-            requestPermissions(new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, 101);
-        initVexorLicensing();
-        String mobileUA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
+
+        // CONFIG WEBVIEW MINIMA ULTRA RAPIDA - IGUAL QUE APPCREATOR24
         WebSettings s = webView.getSettings();
-        s.setJavaScriptEnabled(true); s.setDomStorageEnabled(true); s.setDatabaseEnabled(true);
-        s.setAllowFileAccess(true); s.setAllowContentAccess(true); s.setAllowFileAccessFromFileURLs(true); s.setAllowUniversalAccessFromFileURLs(true);
-        s.setMediaPlaybackRequiresUserGesture(false); s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        s.setJavaScriptEnabled(true); 
+        s.setDomStorageEnabled(true); 
+        s.setDatabaseEnabled(true);
+        s.setAllowFileAccess(true); 
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        s.setUserAgentString(mobileUA);
-        s.setSupportMultipleWindows(true);
-        s.setJavaScriptCanOpenWindowsAutomatically(true);
-        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        s.setUserAgentString("Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36");
+        
         WebSettings ps = pdfView.getSettings();
-        ps.setJavaScriptEnabled(true); ps.setAllowFileAccess(true); ps.setAllowUniversalAccessFromFileURLs(true);
-        ps.setDomStorageEnabled(true); ps.setBuiltInZoomControls(true); ps.setDisplayZoomControls(false);
-        ps.setUserAgentString(mobileUA);
-        ps.setSupportMultipleWindows(true);
+        ps.setJavaScriptEnabled(true);
+        ps.setDomStorageEnabled(true);
+        
         CookieManager cm = CookieManager.getInstance();
         cm.setAcceptCookie(true);
         cm.setAcceptThirdPartyCookies(webView, true);
         cm.setAcceptThirdPartyCookies(pdfView, true);
-        pdfView.setWebViewClient(new WebViewClient(){ @Override public boolean shouldOverrideUrlLoading(WebView view, String url){ view.loadUrl(url); return true; } });
+        
         webView.addJavascriptInterface(new Bridge(), "AndroidQR");
         webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> handleUrl(url));
         btnQr.setOnClickListener(v -> abrirScanner());
+        
         TextView btnPdfMenu = findViewById(R.id.btnPdfMenu);
-        btnPdfMenu.setOnClickListener(v -> {
-            PopupMenu popup = new PopupMenu(MainActivity.this, v);
-            popup.getMenu().add("📂 COMPARTIR"); popup.getMenu().add("⬇ DESCARGAR"); popup.getMenu().add("❌ SALIR");
-            popup.setOnMenuItemClickListener(item -> {
-                String t = item.getTitle().toString();
-                if(t.contains("SALIR")){ pdfOverlay.setVisibility(View.GONE); pdfView.loadUrl("about:blank"); }
-                if(t.contains("DESCARGAR") && pdfFileActual!=null){ copiarADescargas(pdfFileActual); Toast.makeText(this, "Descargado", Toast.LENGTH_LONG).show(); }
-                if(t.contains("COMPARTIR") && pdfFileActual!=null){ Uri uri=FileProvider.getUriForFile(this, getPackageName()+".fileprovider", pdfFileActual); Intent i=new Intent(Intent.ACTION_SEND); i.setType("application/pdf"); i.putExtra(Intent.EXTRA_STREAM, uri); i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION); startActivity(Intent.createChooser(i, "Compartir PDF")); }
-                return true;
-            }); popup.show();
-        });
+        if(btnPdfMenu!=null){
+            btnPdfMenu.setOnClickListener(v -> {
+                PopupMenu popup = new PopupMenu(MainActivity.this, v);
+                popup.getMenu().add("📂 COMPARTIR"); popup.getMenu().add("⬇ DESCARGAR"); popup.getMenu().add("❌ SALIR");
+                popup.setOnMenuItemClickListener(item -> {
+                    String t = item.getTitle().toString();
+                    if(t.contains("SALIR")){ pdfOverlay.setVisibility(View.GONE); pdfView.loadUrl("about:blank"); }
+                    if(t.contains("DESCARGAR") && pdfFileActual!=null){ copiarADescargas(pdfFileActual); Toast.makeText(this, "Descargado", Toast.LENGTH_LONG).show(); }
+                    if(t.contains("COMPARTIR") && pdfFileActual!=null){ Uri uri=FileProvider.getUriForFile(this, getPackageName()+".fileprovider", pdfFileActual); Intent i=new Intent(Intent.ACTION_SEND); i.setType("application/pdf"); i.putExtra(Intent.EXTRA_STREAM, uri); i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION); startActivity(Intent.createChooser(i, "Compartir PDF")); }
+                    return true;
+                }); popup.show();
+            });
+        }
+
         webView.setWebChromeClient(new WebChromeClient() {
             @Override public void onPermissionRequest(PermissionRequest r){ r.grant(r.getResources()); }
             @Override public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
@@ -209,8 +212,15 @@ public class MainActivity extends AppCompatActivity {
                 builder.show(); return true;
             }
         });
+        
         webView.setWebViewClient(new WebViewClient(){
             @Override public void onPageFinished(WebView view, String url){
+                // OCULTA SPLASH CUANDO APPSHEET YA CARGO - ENTRADA RAPIDA
+                if(splashView!=null && splashView.getVisibility()==View.VISIBLE){
+                    splashView.animate().alpha(0f).setDuration(250).withEndAction(() -> {
+                        splashView.setVisibility(View.GONE);
+                    }).start();
+                }
                 if(!hasAccess()){
                     view.evaluateJavascript("javascript:(function(){ try{ var els=document.querySelectorAll('a[href*=\"datastudio\"],a[href*=\"lookerstudio\"]'); if(els.length>0){ var c=els[0]; for(var i=0;i<8&&c.parentElement;i++) c=c.parentElement; c.innerHTML='<div style=\"padding:24px;text-align:center;font-family:sans-serif;\"><h3>❌ Prueba terminada</h3><p>Compra licencia de por vida.<br><b>💳 Pago único</b></p><a href=\""+PAYPAL_LINK+"\" target=\"_blank\" style=\"display:inline-block;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700;margin-top:10px;\">💳 COMPRAR LICENCIA</a><br><br><button onclick=\"window.AndroidQR.abrirActivar()\" style=\"padding:8px 14px;\">🔑 ACTIVAR PRO</button></div>'; } }catch(e){} })()", null);
                 }
@@ -219,7 +229,6 @@ public class MainActivity extends AppCompatActivity {
                         + "function getLabel(el){ var t=''; var p=el; for(var i=0;i<10&&p;i++){ t+=(p.innerText||'')+' '+(p.textContent||'')+' '; p=p.parentElement; } return toAscii(t).toUpperCase(); }"
                         + "function getViewName(){ try{ var h=location.hash.replace(/^#/,''); var sp=new URLSearchParams(h); var v=sp.get('view')||sp.get('viewName')||''; if(v) return decodeURIComponent(v).toUpperCase(); }catch(e){} return ''; }"
                         + "function tieneAcceso(){ try{ return window.AndroidQR.tieneAcceso(); }catch(e){ return true; } }"
-                        + "function precargarReportes(){ try{ if(document.getElementById('vexor-precache')) return; var MAPEOS=JSON.parse(window.AndroidQR.getMapeosJson()||'{}'); var holder=document.createElement('div'); holder.id='vexor-precache'; holder.style.cssText='position:fixed;width:100%;height:calc(100vh - 60px);left:-9999px;top:0;overflow:hidden;opacity:0;pointer-events:none;z-index:-1;'; document.body.appendChild(holder); for(var k in MAPEOS){ var wrapper=document.createElement('div'); wrapper.style.cssText='width:100%;height:calc(100vh - 60px);overflow:hidden;margin-bottom:10px;'; var ifr=document.createElement('iframe'); ifr.src=MAPEOS[k]; ifr.style.cssText='width:100%;height:calc(100% + 20px);border:0;'; ifr.loading='eager'; wrapper.appendChild(ifr); holder.appendChild(wrapper); } }catch(e){} }"
                         + "function embeber(){ try{ if(!tieneAcceso()) return; var MAPEOS=JSON.parse(window.AndroidQR.getMapeosJson()||'{}'); var viewName=getViewName(); if(!viewName) return; var urlEmbed=MAPEOS[viewName]; if(!urlEmbed){ for(var k in MAPEOS){ if(viewName.includes(k) || k.includes(viewName)){ urlEmbed=MAPEOS[k]; break; } } } if(!urlEmbed) return; var l=document.querySelector('a[href*=\"datastudio\"],a[href*=\"lookerstudio\"]'); if(l&&l.dataset.embed!='1'){ l.dataset.embed='1'; var c=l; for(var i=0;i<8&&c.parentElement;i++) c=c.parentElement; c.style.cssText='margin:0;padding:0 0 70px 0;border:0;width:100%;height:calc(100dvh - 60px);height:calc(100vh - 60px);overflow:hidden;box-sizing:border-box;'; c.innerHTML='<div style=\"width:100%;height:100%;overflow:hidden;\"><iframe src=\"'+urlEmbed+'\" style=\"width:100%;height:calc(100% + 20px);border:0;\" loading=\"eager\"></iframe></div>'; } else if(!l){ var cont=document.querySelector('[data-testid=\"dashboard-view-container\"]')||document.querySelector('.dashboard-view')||document.querySelector('[role=\"main\"]'); if(cont && cont.dataset.vexorEmbed!==viewName){ cont.dataset.vexorEmbed=viewName; cont.style.cssText='margin:0;padding:0 0 70px 0;border:0;width:100%;height:calc(100dvh - 60px);height:calc(100vh - 60px);overflow:hidden;background:#fff;box-sizing:border-box;'; cont.innerHTML='<div style=\"width:100%;height:100%;overflow:hidden;\"><iframe src=\"'+urlEmbed+'\" style=\"width:100%;height:calc(100% + 20px);border:0;\" loading=\"eager\" allowfullscreen></iframe></div>'; } } }catch(e){} }"
                         + "function inyectarPanelLicencias(){ var viewName=getViewName(); var hrefUpper=location.href.toUpperCase()+' '+viewName; var esLicencias = hrefUpper.includes('LICENCIAS') || hrefUpper.includes('LICENSES'); var existing=document.getElementById('vexor-license-panel'); if(!esLicencias){ if(existing) existing.remove(); return; } if(existing) return; var target=document.querySelector('[data-testid=\"dashboard-view-container\"]') || document.querySelector('.dashboard-view') || document.body; var panel=document.createElement('div'); panel.id='vexor-license-panel'; panel.style.cssText='margin:12px;padding:16px;background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);border:1px solid #e6e6ef;font-family:sans-serif;'; panel.innerHTML=`<div style='text-align:center;margin-bottom:12px;'><div style='font-size:28px;'>⚡</div><div style='font-weight:800;color:#8f6bc0;'>GESTIONAR LICENCIAS</div><div style='color:#85859c;font-size:11px;'>APK con reportes fijos dentro</div></div><div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;'><button id='btn-estado' style='padding:12px 8px;border:none;border-radius:10px;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;font-weight:700;font-size:12px;'>📊<br>ESTADO DE PLAN</button><button id='btn-activar' style='padding:12px 8px;border:none;border-radius:10px;background:#26263a;color:#fff;font-weight:700;font-size:12px;'>🔑<br>ACTIVAR PRO</button><button id='btn-comprar' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>💳<br>COMPRAR LICENCIA</button><button id='btn-acceso' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>⭐<br>CREAR ACCESO</button></div>`; if(target===document.body){ document.body.insertBefore(panel, document.body.firstChild); } else { target.insertBefore(panel, target.firstChild); } setTimeout(function(){ var b1=document.getElementById('btn-estado'); if(b1) b1.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.estadoPlan(); }); var b2=document.getElementById('btn-activar'); if(b2) b2.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.activarPro(); }); var b3=document.getElementById('btn-comprar'); if(b3) b3.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.comprarLicencia(); }); var b4=document.getElementById('btn-acceso'); if(b4) b4.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.crearAcceso(); }); }, 300);}"
                         + "var currentQrField=null; var lastViewName=getViewName();"
@@ -228,7 +237,7 @@ public class MainActivity extends AppCompatActivity {
                         + "document.addEventListener('focusout',function(e){ var el=e.target; if(el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA') return; setTimeout(function(){ var active=document.activeElement; if(!active || active.tagName!=='INPUT' && active.tagName!=='TEXTAREA'){ try{window.AndroidQR.hideBtn();}catch(err){} currentQrField=null; return; } var label=getLabel(active); if(label.indexOf('QR')==-1){ try{window.AndroidQR.hideBtn();}catch(err){} currentQrField=null; } },300); });"
                         + "document.addEventListener('click',function(e){ var el=e.target; if(el.closest && el.closest('#vexor-license-panel')) return; if(currentQrField && el!==currentQrField && el.tagName!=='INPUT' && el.tagName!=='TEXTAREA'){ setTimeout(function(){ if(document.activeElement!==currentQrField){ try{window.AndroidQR.hideBtn();}catch(err){} } },100); } });"
                         + "window.addEventListener('hashchange',function(){ handleViewChange(); setTimeout(function(){ embeber(); inyectarPanelLicencias(); },200); });"
-                        + "setInterval(function(){ handleViewChange(); embeber(); inyectarPanelLicencias(); },1000); precargarReportes(); embeber(); inyectarPanelLicencias();"
+                        + "setInterval(function(){ handleViewChange(); embeber(); inyectarPanelLicencias(); },1000); embeber(); inyectarPanelLicencias();"
                         + "})()";
                 view.evaluateJavascript(js,null);
             }
@@ -241,27 +250,89 @@ public class MainActivity extends AppCompatActivity {
                 if(pdfOverlay.getVisibility()==View.VISIBLE){ pdfOverlay.setVisibility(View.GONE); } return false;
             }
         });
+
+        // ===== ENTRADA ULTRA RAPIDA TIPO APPCREATOR24 =====
+        // 1. Carga AppSheet YA sin esperar nada
         webView.loadUrl(APPSHEET_URL);
+        
+        // 2. Mapeos locales inmediatos
+        cargarMapeosPorVista();
+        
+        // 3. Verificación de licencia EN SEGUNDO PLANO 2 segundos después
+        webView.postDelayed(() -> {
+            new Thread(() -> {
+                initLicenciaEnSegundoPlano();
+            }).start();
+        }, 2000);
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED)
+            requestPermissions(new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, 101);
     }
 
-    private void initVexorLicensing(){
-        SharedPreferences prefs = getSharedPreferences("VEXOR_PREFS", MODE_PRIVATE);
-        deviceId = prefs.getString("vexor_device_id", "");
-        if(deviceId.isEmpty()){ deviceId = generarDeviceId(); prefs.edit().putString("vexor_device_id", deviceId).apply(); }
-        isLicensed = prefs.getBoolean("vexor_licensed", false); licensePlan = prefs.getString("vexor_plan", ""); licenseMax = prefs.getInt("vexor_max", 1); licenseUsed = prefs.getInt("vexor_used", 1);
-        trialExpiresAt = prefs.getLong("vexor_trial_expires", 0);
-        if(trialExpiresAt==0){ trialExpiresAt = System.currentTimeMillis() + 30L*24*60*60*1000; prefs.edit().putLong("vexor_trial_expires", trialExpiresAt).putBoolean("vexor_trial_allowed", true).putBoolean("vexor_trial_active", true).apply(); }
-        recalcularTrial(); new Thread(() -> syncTrialWithSheet()).start();
-    }
-
-    // UNICO POR CELULAR - WIDEVINE + ARCHIVO PERSISTENTE EN DOCUMENTS
-    private String generarDeviceId(){
+    // ===== ESTO SE EJECUTA EN SEGUNDO PLANO, NO BLOQUEA ENTRADA =====
+    private void initLicenciaEnSegundoPlano(){
         try{
-            File f = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), ".vexor_core");
+            SharedPreferences prefs = getSharedPreferences("VEXOR_PREFS", MODE_PRIVATE);
+            deviceId = prefs.getString("vexor_device_id", "");
+            if(deviceId.isEmpty()){
+                deviceId = generarDeviceIdReal();
+                if(deviceId==null || deviceId.isEmpty()){
+                    deviceId = "DEV-" + UUID.randomUUID().toString().substring(0,16).toUpperCase();
+                }
+                prefs.edit().putString("vexor_device_id", deviceId).apply();
+            }else{
+                // Si ya existe, igual genera el real en fondo para asegurar unicidad
+                new Thread(() -> {
+                    String real = generarDeviceIdReal();
+                    if(real!=null && real.startsWith("DEV-") && !real.equals(deviceId) && real.length()>10){
+                        // Si el guardado era temporal, reemplaza por el real
+                        if(deviceId.contains("-") && deviceId.length()<20){
+                            deviceId = real;
+                            prefs.edit().putString("vexor_device_id", deviceId).apply();
+                        }
+                    }
+                }).start();
+            }
+            
+            isLicensed = prefs.getBoolean("vexor_licensed", false);
+            licensePlan = prefs.getString("vexor_plan", "");
+            licenseMax = prefs.getInt("vexor_max", 1);
+            licenseUsed = prefs.getInt("vexor_used", 1);
+            trialExpiresAt = prefs.getLong("vexor_trial_expires", 0);
+            
+            if(trialExpiresAt==0){
+                trialExpiresAt = System.currentTimeMillis() + 30L*24*60*60*1000;
+                prefs.edit().putLong("vexor_trial_expires", trialExpiresAt).putBoolean("vexor_trial_allowed", true).putBoolean("vexor_trial_active", true).apply();
+            }
+            
+            recalcularTrial();
+            syncTrialWithSheet(); // Verifica con tu Sheet en segundo plano
+            
+            // Si venció, recarga la vista para bloquear Data Studio
+            if(!hasAccess()){
+                runOnUiThread(() -> {
+                    if(webView!=null) webView.reload();
+                });
+            }
+        }catch(Exception e){ e.printStackTrace(); }
+    }
+
+    private String generarDeviceIdReal(){
+        try{
+            File f = new File(getExternalFilesDir(null), ".vexor_core");
             if(f.exists()){
                 BufferedReader br = new BufferedReader(new FileReader(f));
                 String saved = br.readLine(); br.close();
                 if(saved != null && saved.startsWith("DEV-") && saved.length() >= 12) return saved.trim();
+            }
+            File old = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), ".vexor_core");
+            if(old.exists()){
+                BufferedReader br = new BufferedReader(new FileReader(old));
+                String saved = br.readLine(); br.close();
+                if(saved != null && saved.startsWith("DEV-") && saved.length() >= 12) {
+                    FileWriter fw = new FileWriter(f, false); fw.write(saved.trim()); fw.close();
+                    return saved.trim();
+                }
             }
         }catch(Exception e){}
         try{
@@ -275,7 +346,7 @@ public class MainActivity extends AppCompatActivity {
             String newId = "DEV-" + sb.toString().substring(0,16).toUpperCase();
             drm.release();
             try{
-                File f = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), ".vexor_core");
+                File f = new File(getExternalFilesDir(null), ".vexor_core");
                 FileWriter fw = new FileWriter(f, false); fw.write(newId); fw.close();
             }catch(Exception e){}
             return newId;
@@ -286,13 +357,8 @@ public class MainActivity extends AppCompatActivity {
                 byte[] hash = md.digest(raw.getBytes("UTF-8"));
                 StringBuilder sb = new StringBuilder();
                 for(byte b: hash){ sb.append(String.format("%02x", b)); }
-                String fallbackId = "DEV-" + sb.toString().substring(0,16).toUpperCase();
-                try{
-                    File f = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), ".vexor_core");
-                    FileWriter fw = new FileWriter(f, false); fw.write(fallbackId); fw.close();
-                }catch(Exception ee){}
-                return fallbackId;
-            }catch(Exception ee){ return "DEV-" + System.currentTimeMillis(); }
+                return "DEV-" + sb.toString().substring(0,16).toUpperCase();
+            }catch(Exception ee){ return null; }
         }
     }
 
@@ -304,6 +370,7 @@ public class MainActivity extends AppCompatActivity {
         else{ trialActive = true; trialAllowed = true; trialDaysLeft = days; prefs.edit().putBoolean("vexor_trial_active", true).putBoolean("vexor_trial_allowed", true).putInt("vexor_days_left", days).apply(); }
     }
     private boolean hasAccess(){ if(isLicensed) return true; return trialAllowed && trialActive; }
+    
     private void syncTrialWithSheet(){
         try{
             String urlStr = GOOGLE_SHEET_API_URL + "?action=check_trial&device_id=" + deviceId;
@@ -323,6 +390,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }catch(Exception e){ e.printStackTrace(); }
     }
+    
     private void verificarLicenciaConSheet(String key, LicenseCallback cb){
         new Thread(() -> {
             try{
@@ -338,11 +406,13 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
     interface LicenseCallback{ void onResult(boolean allowed, String msg, JSONObject data); }
+    
     private void mostrarBloqueoPorExpiracion(){
         String html = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'><style>body{font-family:sans-serif;background:#f6f6fa;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}.card{background:#fff;padding:24px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);max-width:320px}.btn{background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:700;margin-top:12px}.btn2{margin-top:10px;background:#26263a;color:#fff;padding:10px 16px;border-radius:8px;border:none;font-weight:700}</style></head><body><div class='card'><h3>❌ Prueba terminada</h3><p>Tu prueba de 30 días terminó.<br><b>💳 Pago único, de por vida</b></p><a class='btn' href='"+PAYPAL_LINK+"' target='_blank'>💳 COMPRAR LICENCIA</a><br><br><button class='btn2' onclick=\"AndroidBridge.abrirActivar()\">🔑 ACTIVAR PRO</button></div></body></html>";
         pdfView.addJavascriptInterface(new Object(){ @JavascriptInterface public void abrirActivar(){ runOnUiThread(() -> { pdfOverlay.setVisibility(View.GONE); mostrarActivarProDialog(); }); } }, "AndroidBridge");
         pdfView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null);
-        findViewById(R.id.btnPdfMenu).setVisibility(View.VISIBLE); pdfOverlay.setVisibility(View.VISIBLE);
+        if(findViewById(R.id.btnPdfMenu)!=null) findViewById(R.id.btnPdfMenu).setVisibility(View.VISIBLE); 
+        pdfOverlay.setVisibility(View.VISIBLE);
     }
     private void mostrarEstadoPlanDialog(){
         recalcularTrial(); String estado; String detalle;
@@ -455,14 +525,15 @@ public class MainActivity extends AppCompatActivity {
     }
     private void mostrarPdfEnVisor(File file){
         try{
-            pdfFileActual = file; findViewById(R.id.btnPdfMenu).setVisibility(View.VISIBLE);
+            pdfFileActual = file; 
+            if(findViewById(R.id.btnPdfMenu)!=null) findViewById(R.id.btnPdfMenu).setVisibility(View.VISIBLE);
             FileInputStream fis = new FileInputStream(file); ByteArrayOutputStream bos = new ByteArrayOutputStream(); byte[] buf = new byte[4096]; int r; while((r = fis.read(buf))!=-1) bos.write(buf, 0, r); fis.close();
             String base64 = Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP);
             String html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'><script src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'></script><style>body{margin:0;background:#525659;padding:0}.page{margin:10px auto;display:block;box-shadow:0 0 10px #000;width:100%}</style></head><body><div id='container'></div><script>var pdfData=atob('"+base64+"'); pdfjsLib.getDocument({data: pdfData}).promise.then(function(pdf){ var container=document.getElementById('container'); for(let i=1;i<=pdf.numPages;i++){ let canvas=document.createElement('canvas'); canvas.className='page'; container.appendChild(canvas); pdf.getPage(i).then(function(page){ var viewport=page.getViewport({scale:1.2}); canvas.height=viewport.height; canvas.width=viewport.width; page.render({canvasContext:canvas.getContext('2d'), viewport:viewport}); }); } });</script></body></html>";
             pdfView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null); pdfOverlay.setVisibility(View.VISIBLE);
         }catch(Exception e){ Toast.makeText(this, "Error visor: "+e.getMessage(), Toast.LENGTH_SHORT).show(); }
     }
-    private void mostrarLinkEnVisor(String url){ pdfFileActual = null; findViewById(R.id.btnPdfMenu).setVisibility(View.GONE); pdfView.loadUrl(url); pdfOverlay.setVisibility(View.VISIBLE); }
+    private void mostrarLinkEnVisor(String url){ pdfFileActual = null; if(findViewById(R.id.btnPdfMenu)!=null) findViewById(R.id.btnPdfMenu).setVisibility(View.GONE); pdfView.loadUrl(url); pdfOverlay.setVisibility(View.VISIBLE); }
     private void copiarADescargas(File src){ try{ File dst = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), src.getName()); FileInputStream in = new FileInputStream(src); FileOutputStream out = new FileOutputStream(dst); byte[] buf = new byte[4096]; int len; while((len = in.read(buf)) > 0) out.write(buf, 0, len); in.close(); out.close(); }catch(Exception e){ e.printStackTrace(); } }
     private void abrirScanner(){ IntentIntegrator i=new IntentIntegrator(this); i.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE); i.setPrompt("Escanea el QR"); i.setBeepEnabled(true); i.setOrientationLocked(false); i.initiateScan(); }
     @Override public void onBackPressed() {
