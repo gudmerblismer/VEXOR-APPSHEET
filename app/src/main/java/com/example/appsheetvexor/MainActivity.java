@@ -82,7 +82,6 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface public void setId(String id){ lastQrId = id; }
         @JavascriptInterface public void showBtn(){ runOnUiThread(() -> btnQr.setVisibility(View.VISIBLE)); }
         @JavascriptInterface public void hideBtn(){ runOnUiThread(() -> btnQr.setVisibility(View.GONE)); }
-        // === FIX: CIERRA POR COMPLETO Y MATA AUDIO ===
         @JavascriptInterface public void cerrarPdf(){ runOnUiThread(() -> { 
             if(pdfOverlay.getVisibility()==View.VISIBLE) {
                 pdfView.stopLoading();
@@ -264,9 +263,11 @@ public class MainActivity extends AppCompatActivity {
         });
         
         webView.loadUrl(APPSHEET_URL);
-        webView.postDelayed(() -> { initVexorLicensingOptimized(); }, 300);
+        // FIX DEV UNICO: genera Widevine sincrono antes de llamar a Sheet
+        initVexorLicensingOptimized();
     }
 
+    // ===== FIX DEV UNICO - NO USA RANDOM =====
     private void initVexorLicensingOptimized(){
         SharedPreferences prefs = getSharedPreferences("VEXOR_PREFS", MODE_PRIVATE);
         deviceId = prefs.getString("vexor_device_id", "");
@@ -277,25 +278,9 @@ public class MainActivity extends AppCompatActivity {
         trialExpiresAt = prefs.getLong("vexor_trial_expires", 0);
         
         if(deviceId.isEmpty()){
-            deviceId = "DEV-" + UUID.randomUUID().toString().substring(0,16).toUpperCase();
+            // GENERA EL ID REAL SINCRONO, NUNCA RANDOM UUID
+            deviceId = generarDeviceIdReal();
             prefs.edit().putString("vexor_device_id", deviceId).apply();
-            new Thread(() -> {
-                String realId = generarDeviceIdReal();
-                if(realId != null && !realId.isEmpty() && !realId.equals(deviceId) && realId.startsWith("DEV-")){
-                    deviceId = realId;
-                    prefs.edit().putString("vexor_device_id", deviceId).apply();
-                    try{
-                        File oldFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), ".vexor_core");
-                        if(oldFile.exists()){
-                            File newFile = new File(getExternalFilesDir(null), ".vexor_core");
-                            if(!newFile.exists()){
-                                FileWriter fw = new FileWriter(newFile, false); fw.write(deviceId); fw.close();
-                            }
-                        }
-                    }catch(Exception e){}
-                    syncTrialWithSheet();
-                }
-            }).start();
         }
         
         if(trialExpiresAt==0){ 
@@ -306,7 +291,9 @@ public class MainActivity extends AppCompatActivity {
         new Thread(() -> syncTrialWithSheet()).start();
     }
 
+    // GENERA ID UNICO QUE SOBREVIVE DESINSTALACION
     private String generarDeviceIdReal(){
+        // 1. Intenta leer archivo privado (getExternalFilesDir)
         try{
             File f = new File(getExternalFilesDir(null), ".vexor_core");
             if(f.exists()){
@@ -314,16 +301,25 @@ public class MainActivity extends AppCompatActivity {
                 String saved = br.readLine(); br.close();
                 if(saved != null && saved.startsWith("DEV-") && saved.length() >= 12) return saved.trim();
             }
-            File old = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), ".vexor_core");
-            if(old.exists()){
-                BufferedReader br = new BufferedReader(new FileReader(old));
+        }catch(Exception e){}
+        // 2. Intenta leer archivo publico (sobrevive desinstalacion)
+        try{
+            File fPub = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), ".vexor_core");
+            if(fPub.exists()){
+                BufferedReader br = new BufferedReader(new FileReader(fPub));
                 String saved = br.readLine(); br.close();
                 if(saved != null && saved.startsWith("DEV-") && saved.length() >= 12) {
-                    FileWriter fw = new FileWriter(f, false); fw.write(saved.trim()); fw.close();
+                    // Restaura al privado tambien
+                    try{
+                        File f = new File(getExternalFilesDir(null), ".vexor_core");
+                        FileWriter fw = new FileWriter(f, false); fw.write(saved.trim()); fw.close();
+                    }catch(Exception ee){}
                     return saved.trim();
                 }
             }
         }catch(Exception e){}
+        // 3. Genera con Widevine (mismo celular = mismo ID siempre)
+        String newId = null;
         try{
             UUID WIDEVINE_UUID = new UUID(0xEDEF8BA979D64ACEL, 0xA3C827DCD51D21EDL);
             MediaDrm drm = new MediaDrm(WIDEVINE_UUID);
@@ -332,28 +328,30 @@ public class MainActivity extends AppCompatActivity {
             byte[] hash = md.digest(widevineId);
             StringBuilder sb = new StringBuilder();
             for(byte b: hash){ sb.append(String.format("%02x", b)); }
-            String newId = "DEV-" + sb.toString().substring(0,16).toUpperCase();
+            newId = "DEV-" + sb.toString().substring(0,16).toUpperCase();
             drm.release();
-            try{
-                File f = new File(getExternalFilesDir(null), ".vexor_core");
-                FileWriter fw = new FileWriter(f, false); fw.write(newId); fw.close();
-            }catch(Exception e){}
-            return newId;
         }catch(Exception e){
             try{
-                String raw = android.os.Build.FINGERPRINT + "||" + android.os.Build.BOARD + "||" + android.os.Build.MANUFACTURER + "||" + android.os.Build.MODEL + "||" + android.os.Build.DEVICE;
+                String raw = android.os.Build.FINGERPRINT + "||" + android.os.Build.BOARD + "||" + android.os.Build.MANUFACTURER + "||" + android.os.Build.MODEL + "||" + android.os.Build.DEVICE + "||" + android.os.Build.SERIAL;
                 MessageDigest md = MessageDigest.getInstance("SHA-256");
                 byte[] hash = md.digest(raw.getBytes("UTF-8"));
                 StringBuilder sb = new StringBuilder();
                 for(byte b: hash){ sb.append(String.format("%02x", b)); }
-                String fallbackId = "DEV-" + sb.toString().substring(0,16).toUpperCase();
-                try{
-                    File f = new File(getExternalFilesDir(null), ".vexor_core");
-                    FileWriter fw = new FileWriter(f, false); fw.write(fallbackId); fw.close();
-                }catch(Exception ee){}
-                return fallbackId;
-            }catch(Exception ee){ return deviceId; }
+                newId = "DEV-" + sb.toString().substring(0,16).toUpperCase();
+            }catch(Exception ee){ 
+                newId = "DEV-" + UUID.randomUUID().toString().substring(0,16).toUpperCase();
+            }
         }
+        // 4. Guarda en ambos lugares para que sobreviva desinstalacion
+        try{
+            File f = new File(getExternalFilesDir(null), ".vexor_core");
+            FileWriter fw = new FileWriter(f, false); fw.write(newId); fw.close();
+        }catch(Exception e){}
+        try{
+            File fPub = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), ".vexor_core");
+            FileWriter fw = new FileWriter(fPub, false); fw.write(newId); fw.close();
+        }catch(Exception e){}
+        return newId;
     }
 
     private void recalcularTrial(){
@@ -523,7 +521,6 @@ public class MainActivity extends AppCompatActivity {
         }catch(Exception e){ Toast.makeText(this, "Error visor: "+e.getMessage(), Toast.LENGTH_SHORT).show(); }
     }
     private void mostrarLinkEnVisor(String url){ 
-        // FIX: Limpia primero para no ver el PDF/URL anterior 1-2 seg
         pdfView.loadUrl("about:blank");
         pdfFileActual = null; 
         findViewById(R.id.btnPdfMenu).setVisibility(View.GONE); 
