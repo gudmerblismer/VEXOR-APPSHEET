@@ -78,37 +78,18 @@ public class MainActivity extends AppCompatActivity {
     private SharedPreferences mapeosPrefs;
     private JSONObject mapeosPorVista = new JSONObject();
 
-    // ===== FIX PARA AUDIO Y VISTA PREVIA =====
-    private void cerrarVisorCompleto(){
-        try{
-            if(pdfView!=null){
-                pdfView.stopLoading();
-                pdfView.loadUrl("about:blank");
-                pdfView.clearHistory();
-                pdfView.onPause();
-                pdfView.pauseTimers();
-                // Mata el audio de YouTube
-                pdfView.evaluateJavascript("javascript:try{var v=document.querySelectorAll('video,audio');v.forEach(function(e){e.pause();e.src='';});}catch(e){}", null);
-            }
-        }catch(Exception e){}
-        if(pdfOverlay!=null) pdfOverlay.setVisibility(View.GONE);
-        pdfFileActual = null;
-    }
-    private void abrirVisor(){
-        try{
-            if(pdfView!=null){
-                pdfView.onResume();
-                pdfView.resumeTimers();
-            }
-        }catch(Exception e){}
-        if(pdfOverlay!=null) pdfOverlay.setVisibility(View.VISIBLE);
-    }
-
     public class Bridge {
         @JavascriptInterface public void setId(String id){ lastQrId = id; }
         @JavascriptInterface public void showBtn(){ runOnUiThread(() -> btnQr.setVisibility(View.VISIBLE)); }
         @JavascriptInterface public void hideBtn(){ runOnUiThread(() -> btnQr.setVisibility(View.GONE)); }
-        @JavascriptInterface public void cerrarPdf(){ runOnUiThread(() -> cerrarVisorCompleto()); }
+        // === FIX: CIERRA POR COMPLETO Y MATA AUDIO ===
+        @JavascriptInterface public void cerrarPdf(){ runOnUiThread(() -> { 
+            if(pdfOverlay.getVisibility()==View.VISIBLE) {
+                pdfView.stopLoading();
+                pdfView.loadUrl("about:blank");
+                pdfOverlay.setVisibility(View.GONE);
+            }
+        }); }
         @JavascriptInterface public void abrirActivar(){ runOnUiThread(() -> mostrarActivarProDialog()); }
         @JavascriptInterface public void crearAcceso(){ runOnUiThread(() -> mostrarDialogCrearAccesoDirecto()); }
         @JavascriptInterface public void estadoPlan(){ runOnUiThread(() -> mostrarEstadoPlanDialog()); }
@@ -196,7 +177,11 @@ public class MainActivity extends AppCompatActivity {
             popup.getMenu().add("📂 COMPARTIR"); popup.getMenu().add("⬇ DESCARGAR"); popup.getMenu().add("❌ SALIR");
             popup.setOnMenuItemClickListener(item -> {
                 String t = item.getTitle().toString();
-                if(t.contains("SALIR")){ cerrarVisorCompleto(); }
+                if(t.contains("SALIR")){ 
+                    pdfView.stopLoading();
+                    pdfView.loadUrl("about:blank");
+                    pdfOverlay.setVisibility(View.GONE); 
+                }
                 if(t.contains("DESCARGAR") && pdfFileActual!=null){ copiarADescargas(pdfFileActual); Toast.makeText(this, "Descargado", Toast.LENGTH_LONG).show(); }
                 if(t.contains("COMPARTIR") && pdfFileActual!=null){ Uri uri=FileProvider.getUriForFile(this, getPackageName()+".fileprovider", pdfFileActual); Intent i=new Intent(Intent.ACTION_SEND); i.setType("application/pdf"); i.putExtra(Intent.EXTRA_STREAM, uri); i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION); startActivity(Intent.createChooser(i, "Compartir PDF")); }
                 return true;
@@ -237,9 +222,6 @@ public class MainActivity extends AppCompatActivity {
         });
         
         webView.setWebViewClient(new WebViewClient(){
-            @Override public void onPageStarted(WebView view, String url, Bitmap favicon){
-                super.onPageStarted(view, url, favicon);
-            }
             @Override public void onPageFinished(WebView view, String url){
                 if(!hasAccess()){
                     view.evaluateJavascript("javascript:(function(){ try{ var els=document.querySelectorAll('a[href*=\"datastudio\"],a[href*=\"lookerstudio\"]'); if(els.length>0){ var c=els[0]; for(var i=0;i<8&&c.parentElement;i++) c=c.parentElement; c.innerHTML='<div style=\"padding:24px;text-align:center;font-family:sans-serif;\"><h3>❌ Prueba terminada</h3><p>Compra licencia de por vida.<br><b>💳 Pago único</b></p><a href=\""+PAYPAL_LINK+"\" target=\"_blank\" style=\"display:inline-block;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700;margin-top:10px;\">💳 COMPRAR LICENCIA</a><br><br><button onclick=\"window.AndroidQR.abrirActivar()\" style=\"padding:8px 14px;\">🔑 ACTIVAR PRO</button></div>'; } }catch(e){} })()", null);
@@ -253,7 +235,7 @@ public class MainActivity extends AppCompatActivity {
                         + "function embeber(){ try{ if(!tieneAcceso()) return; var MAPEOS=JSON.parse(window.AndroidQR.getMapeosJson()||'{}'); var viewName=getViewName(); if(!viewName) return; var urlEmbed=MAPEOS[viewName]; if(!urlEmbed){ for(var k in MAPEOS){ if(viewName.includes(k) || k.includes(viewName)){ urlEmbed=MAPEOS[k]; break; } } } if(!urlEmbed) return; var l=document.querySelector('a[href*=\"datastudio\"],a[href*=\"lookerstudio\"]'); if(l&&l.dataset.embed!='1'){ l.dataset.embed='1'; var c=l; for(var i=0;i<8&&c.parentElement;i++) c=c.parentElement; c.style.cssText='margin:0;padding:0 0 70px 0;border:0;width:100%;height:calc(100dvh - 60px);height:calc(100vh - 60px);overflow:hidden;box-sizing:border-box;'; c.innerHTML='<div style=\"width:100%;height:100%;overflow:hidden;\"><iframe src=\"'+urlEmbed+'\" style=\"width:100%;height:calc(100% + 20px);border:0;\" loading=\"eager\"></iframe></div>'; } else if(!l){ var cont=document.querySelector('[data-testid=\"dashboard-view-container\"]')||document.querySelector('.dashboard-view')||document.querySelector('[role=\"main\"]'); if(cont && cont.dataset.vexorEmbed!==viewName){ cont.dataset.vexorEmbed=viewName; cont.style.cssText='margin:0;padding:0 0 70px 0;border:0;width:100%;height:calc(100dvh - 60px);height:calc(100vh - 60px);overflow:hidden;background:#fff;box-sizing:border-box;'; cont.innerHTML='<div style=\"width:100%;height:100%;overflow:hidden;\"><iframe src=\"'+urlEmbed+'\" style=\"width:100%;height:calc(100% + 20px);border:0;\" loading=\"eager\" allowfullscreen></iframe></div>'; } } }catch(e){} }"
                         + "function inyectarPanelLicencias(){ var viewName=getViewName(); var hrefUpper=location.href.toUpperCase()+' '+viewName; var esLicencias = hrefUpper.includes('LICENCIAS') || hrefUpper.includes('LICENSES'); var existing=document.getElementById('vexor-license-panel'); if(!esLicencias){ if(existing) existing.remove(); return; } if(existing) return; var target=document.querySelector('[data-testid=\"dashboard-view-container\"]') || document.querySelector('.dashboard-view') || document.body; var panel=document.createElement('div'); panel.id='vexor-license-panel'; panel.style.cssText='margin:12px;padding:16px;background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);border:1px solid #e6e6ef;font-family:sans-serif;'; panel.innerHTML=`<div style='text-align:center;margin-bottom:12px;'><div style='font-size:28px;'>⚡</div><div style='font-weight:800;color:#8f6bc0;'>GESTIONAR LICENCIAS</div><div style='color:#85859c;font-size:11px;'>APK con reportes fijos dentro</div></div><div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;'><button id='btn-estado' style='padding:12px 8px;border:none;border-radius:10px;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;font-weight:700;font-size:12px;'>📊<br>ESTADO DE PLAN</button><button id='btn-activar' style='padding:12px 8px;border:none;border-radius:10px;background:#26263a;color:#fff;font-weight:700;font-size:12px;'>🔑<br>ACTIVAR PRO</button><button id='btn-comprar' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>💳<br>COMPRAR LICENCIA</button><button id='btn-acceso' style='padding:12px 8px;border-radius:10px;background:#fff;border:1px solid #e6e6ef;color:#26263a;font-weight:700;font-size:12px;'>⭐<br>CREAR ACCESO</button></div>`; if(target===document.body){ document.body.insertBefore(panel, document.body.firstChild); } else { target.insertBefore(panel, target.firstChild); } setTimeout(function(){ var b1=document.getElementById('btn-estado'); if(b1) b1.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.estadoPlan(); }); var b2=document.getElementById('btn-activar'); if(b2) b2.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.activarPro(); }); var b3=document.getElementById('btn-comprar'); if(b3) b3.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.comprarLicencia(); }); var b4=document.getElementById('btn-acceso'); if(b4) b4.addEventListener('click', function(e){ e.preventDefault(); window.AndroidQR.crearAcceso(); }); }, 300);}"
                         + "var currentQrField=null; var lastViewName=getViewName();"
-                        + "function handleViewChange(){ try{ var newView=getViewName(); if(newView!==lastViewName){ lastViewName=newView; window.AndroidQR.cerrarPdf(); currentQrField=null; } }catch(e){} }"
+                        + "function handleViewChange(){ try{ var newView=getViewName(); if(newView!==lastViewName){ lastViewName=newView; window.AndroidQR.cerrarPdf(); window.AndroidQR.hideBtn(); currentQrField=null; } }catch(e){} }"
                         + "document.addEventListener('focusin',function(e){ var el=e.target; if(el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA'){ if(currentQrField && el!==currentQrField){ try{window.AndroidQR.hideBtn();}catch(err){} currentQrField=null; } return; } var label=getLabel(el); if(label.indexOf('QR')==-1){ if(currentQrField!==null){ try{window.AndroidQR.hideBtn();}catch(err){} currentQrField=null; } return; } currentQrField=el; if(!el.id) el.id='qr_'+Date.now(); try{window.AndroidQR.setId(el.id);}catch(e){} if(el.value.trim()==''){ try{window.AndroidQR.showBtn();}catch(e){} } else { try{window.AndroidQR.hideBtn();}catch(e){} } });"
                         + "document.addEventListener('focusout',function(e){ var el=e.target; if(el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA') return; setTimeout(function(){ var active=document.activeElement; if(!active || active.tagName!=='INPUT' && active.tagName!=='TEXTAREA'){ try{window.AndroidQR.hideBtn();}catch(err){} currentQrField=null; return; } var label=getLabel(active); if(label.indexOf('QR')==-1){ try{window.AndroidQR.hideBtn();}catch(err){} currentQrField=null; } },300); });"
                         + "document.addEventListener('click',function(e){ var el=e.target; if(el.closest && el.closest('#vexor-license-panel')) return; if(currentQrField && el!==currentQrField && el.tagName!=='INPUT' && el.tagName!=='TEXTAREA'){ setTimeout(function(){ if(document.activeElement!==currentQrField){ try{window.AndroidQR.hideBtn();}catch(err){} } },100); } });"
@@ -273,7 +255,11 @@ public class MainActivity extends AppCompatActivity {
                     mostrarLinkEnVisor(url); 
                     return true;
                 }
-                if(pdfOverlay.getVisibility()==View.VISIBLE){ cerrarVisorCompleto(); } return false;
+                if(pdfOverlay.getVisibility()==View.VISIBLE){ 
+                    pdfView.stopLoading();
+                    pdfView.loadUrl("about:blank");
+                    pdfOverlay.setVisibility(View.GONE); 
+                } return false;
             }
         });
         
@@ -414,9 +400,9 @@ public class MainActivity extends AppCompatActivity {
     interface LicenseCallback{ void onResult(boolean allowed, String msg, JSONObject data); }
     private void mostrarBloqueoPorExpiracion(){
         String html = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'><style>body{font-family:sans-serif;background:#f6f6fa;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}.card{background:#fff;padding:24px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);max-width:320px}.btn{background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:700;margin-top:12px}.btn2{margin-top:10px;background:#26263a;color:#fff;padding:10px 16px;border-radius:8px;border:none;font-weight:700}</style></head><body><div class='card'><h3>❌ Prueba terminada</h3><p>Tu prueba de 30 días terminó.<br><b>💳 Pago único, de por vida</b></p><a class='btn' href='"+PAYPAL_LINK+"' target='_blank'>💳 COMPRAR LICENCIA</a><br><br><button class='btn2' onclick=\"AndroidBridge.abrirActivar()\">🔑 ACTIVAR PRO</button></div></body></html>";
-        pdfView.addJavascriptInterface(new Object(){ @JavascriptInterface public void abrirActivar(){ runOnUiThread(() -> { cerrarVisorCompleto(); mostrarActivarProDialog(); }); } }, "AndroidBridge");
+        pdfView.addJavascriptInterface(new Object(){ @JavascriptInterface public void abrirActivar(){ runOnUiThread(() -> { pdfOverlay.setVisibility(View.GONE); mostrarActivarProDialog(); }); } }, "AndroidBridge");
         pdfView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null);
-        findViewById(R.id.btnPdfMenu).setVisibility(View.VISIBLE); abrirVisor();
+        findViewById(R.id.btnPdfMenu).setVisibility(View.VISIBLE); pdfOverlay.setVisibility(View.VISIBLE);
     }
     private void mostrarEstadoPlanDialog(){
         recalcularTrial(); String estado; String detalle;
@@ -529,28 +515,31 @@ public class MainActivity extends AppCompatActivity {
     }
     private void mostrarPdfEnVisor(File file){
         try{
-            cerrarVisorCompleto(); // limpia el anterior primero
-            pdfFileActual = file; 
-            findViewById(R.id.btnPdfMenu).setVisibility(View.VISIBLE);
+            pdfFileActual = file; findViewById(R.id.btnPdfMenu).setVisibility(View.VISIBLE);
             FileInputStream fis = new FileInputStream(file); ByteArrayOutputStream bos = new ByteArrayOutputStream(); byte[] buf = new byte[4096]; int r; while((r = fis.read(buf))!=-1) bos.write(buf, 0, r); fis.close();
             String base64 = Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP);
             String html = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'><script src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'></script><style>body{margin:0;background:#525659;padding:0}.page{margin:10px auto;display:block;box-shadow:0 0 10px #000;width:100%}</style></head><body><div id='container'></div><script>var pdfData=atob('"+base64+"'); pdfjsLib.getDocument({data: pdfData}).promise.then(function(pdf){ var container=document.getElementById('container'); for(let i=1;i<=pdf.numPages;i++){ let canvas=document.createElement('canvas'); canvas.className='page'; container.appendChild(canvas); pdf.getPage(i).then(function(page){ var viewport=page.getViewport({scale:1.2}); canvas.height=viewport.height; canvas.width=viewport.width; page.render({canvasContext:canvas.getContext('2d'), viewport:viewport}); }); } });</script></body></html>";
-            pdfView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null); 
-            abrirVisor();
+            pdfView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null); pdfOverlay.setVisibility(View.VISIBLE);
         }catch(Exception e){ Toast.makeText(this, "Error visor: "+e.getMessage(), Toast.LENGTH_SHORT).show(); }
     }
     private void mostrarLinkEnVisor(String url){ 
-        cerrarVisorCompleto(); // limpia el anterior primero
+        // FIX: Limpia primero para no ver el PDF/URL anterior 1-2 seg
+        pdfView.loadUrl("about:blank");
         pdfFileActual = null; 
         findViewById(R.id.btnPdfMenu).setVisibility(View.GONE); 
         pdfView.loadUrl(url); 
-        abrirVisor(); 
+        pdfOverlay.setVisibility(View.VISIBLE); 
     }
     private void copiarADescargas(File src){ try{ File dst = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), src.getName()); FileInputStream in = new FileInputStream(src); FileOutputStream out = new FileOutputStream(dst); byte[] buf = new byte[4096]; int len; while((len = in.read(buf)) > 0) out.write(buf, 0, len); in.close(); out.close(); }catch(Exception e){ e.printStackTrace(); } }
     private void abrirScanner(){ IntentIntegrator i=new IntentIntegrator(this); i.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE); i.setPrompt("Escanea el QR"); i.setBeepEnabled(true); i.setOrientationLocked(false); i.initiateScan(); }
     @Override public void onBackPressed() {
         if(recorder!=null){ detenerAudio(); return; }
-        if(pdfOverlay.getVisibility()==View.VISIBLE){ cerrarVisorCompleto(); return; }
+        if(pdfOverlay.getVisibility()==View.VISIBLE){ 
+            pdfView.stopLoading();
+            pdfView.loadUrl("about:blank");
+            pdfOverlay.setVisibility(View.GONE); 
+            return; 
+        }
         long now = System.currentTimeMillis();
         if (now - lastBackPress < 600) { webView.clearHistory(); webView.loadUrl(APPSHEET_URL); finishAffinity(); return; }
         lastBackPress = now;
