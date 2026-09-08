@@ -250,7 +250,7 @@ public class MainActivity extends AppCompatActivity {
                         + "document.addEventListener('focusout',function(e){ var el=e.target; if(el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA') return; setTimeout(function(){ var active=document.activeElement; if(!active || active.tagName!=='INPUT' && active.tagName!=='TEXTAREA'){ try{window.AndroidQR.hideBtn();}catch(err){} currentQrField=null; return; } var label=getLabel(active); if(label.indexOf('QR')==-1){ try{window.AndroidQR.hideBtn();}catch(err){} currentQrField=null; } },300); });"
                         + "document.addEventListener('click',function(e){ var el=e.target; if(el.closest && el.closest('#vexor-license-panel')) return; if(currentQrField && el!==currentQrField && el.tagName!=='INPUT' && el.tagName!=='TEXTAREA'){ setTimeout(function(){ if(document.activeElement!==currentQrField){ try{window.AndroidQR.hideBtn();}catch(err){} } },100); } });"
                         + "window.addEventListener('hashchange',function(){ handleViewChange(); setTimeout(function(){ embeber(); inyectarPanelLicencias(); },200); });"
-                        + "setInterval(function(){ handleViewChange(); embeber(); inyectarPanelLicencias(); },1000); embeber(); inyectarPanelLicencias(); setTimeout(function(){ precargarReportes(); }, 2500);"
+                        + "setInterval(function(){ handleViewChange(); embeber(); inyectarPanelLicencias(); },1000); precargarReportes(); embeber(); inyectarPanelLicencias();"
                         + "})()";
                 view.evaluateJavascript(js,null);
                 mostrarUpsellSiEsNecesario();
@@ -567,20 +567,11 @@ public class MainActivity extends AppCompatActivity {
             pdfOverlay.setVisibility(View.GONE); 
             return; 
         }
-        // Si puede ir atras dentro de AppSheet, que vaya atras
-        if (webView.canGoBack()){
-            webView.goBack(); 
-            return; 
-        }
-        // Si ya esta en la vista inicial, 2 toques para salir sin recargar
         long now = System.currentTimeMillis();
-        if (now - lastBackPress < 600) { 
-            // Doble tap: minimiza la app, no la mata, asi queda en memoria
-            moveTaskToBack(true);
-            return; 
-        }
+        if (now - lastBackPress < 600) { webView.clearHistory(); webView.loadUrl(APPSHEET_URL); finishAffinity(); return; }
         lastBackPress = now;
-        Toast.makeText(this, "Presiona de nuevo para salir", Toast.LENGTH_SHORT).show();
+        if (webView.canGoBack()){ webView.goBack(); return; }
+        super.onBackPressed();
     }
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data){
         super.onActivityResult(requestCode,resultCode,data);
