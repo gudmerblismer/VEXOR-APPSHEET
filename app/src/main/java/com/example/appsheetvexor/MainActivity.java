@@ -232,6 +232,19 @@ public class MainActivity extends AppCompatActivity {
         
         webView.setWebViewClient(new WebViewClient(){
             @Override public void onPageFinished(WebView view, String url){
+                // FIX: Al llegar al menu principal borra historial de Google para no volver al "Elige una cuenta"
+                if(esUrlDeMiApp(url)){
+                    try{
+                        android.webkit.WebBackForwardList hist = view.copyBackForwardList();
+                        int cur = hist.getCurrentIndex();
+                        if(cur>0){
+                            String prev = hist.getItemAtIndex(cur-1).getUrl();
+                            if(prev!=null && (prev.contains("accounts.google.com") || prev.contains("ServiceLogin") || prev.contains("signin") || prev.contains("oauth") || prev.contains("consent") || prev.contains("google.com/a/") || prev.contains("Acceder con Google"))){
+                                view.clearHistory();
+                            }
+                        }
+                    }catch(Exception e){}
+                }
                 if(!hasAccess()){
                     view.evaluateJavascript("javascript:(function(){ try{ var els=document.querySelectorAll('a[href*=\"datastudio\"],a[href*=\"lookerstudio\"]'); if(els.length>0){ var c=els[0]; for(var i=0;i<8&&c.parentElement;i++) c=c.parentElement; c.innerHTML='<div style=\"padding:24px;text-align:center;font-family:sans-serif;\"><h3>❌ Prueba terminada</h3><p>Compra licencia de por vida.<br><b>💳 Pago único</b></p><a href=\""+PAYPAL_LINK+"\" target=\"_blank\" style=\"display:inline-block;background:linear-gradient(135deg,#8f6bc0,#3fb0ac);color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700;margin-top:10px;\">💳 COMPRAR LICENCIA</a><br><br><button onclick=\"window.AndroidQR.abrirActivar()\" style=\"padding:8px 14px;\">🔑 ACTIVAR PRO</button></div>'; } }catch(e){} })()", null);
                 }
@@ -567,20 +580,68 @@ public class MainActivity extends AppCompatActivity {
             pdfOverlay.setVisibility(View.GONE); 
             return; 
         }
-        // Si puede ir atras dentro de AppSheet, que vaya atras
-        if (webView.canGoBack()){
-            webView.goBack(); 
-            return; 
-        }
-        // Si ya esta en la vista inicial, 2 toques para salir sin recargar
-        long now = System.currentTimeMillis();
-        if (now - lastBackPress < 600) { 
-            // Doble tap: minimiza la app, no la mata, asi queda en memoria
-            moveTaskToBack(true);
-            return; 
-        }
-        lastBackPress = now;
-        Toast.makeText(this, "Presiona de nuevo para salir", Toast.LENGTH_SHORT).show();
+
+        webView.evaluateJavascript("(function(){"
+                + "try{"
+                + "var hash=(location.hash||'').toLowerCase();"
+                + "var isForm = hash.includes('form') || !!document.querySelector('[data-testid=\"form-view\"]');"
+                + "if(isForm){"
+                + "  var btns=document.querySelectorAll('button');"
+                + "  for(var i=0;i<btns.length;i++){ if(btns[i].innerText && btns[i].innerText.toLowerCase().includes('cancel')){ btns[i].click(); return 'form_handled'; } }"
+                + "  var backs=document.querySelectorAll('[aria-label=\"Back\"],[aria-label=\"Atrás\"]');"
+                + "  if(backs.length>0){ backs[0].click(); return 'form_handled'; }"
+                + "  window.history.back(); return 'form_handled';"
+                + "}"
+                + "return 'no_form';"
+                + "}catch(e){ return 'no_form'; }"
+                + "})()", value -> {
+            String v = value!=null ? value.replace("\"","") : "no_form";
+            if("form_handled".equals(v)){
+                return;
+            }
+            runOnUiThread(() -> {
+                try{
+                    android.webkit.WebBackForwardList hist = webView.copyBackForwardList();
+                    int curIdx = hist.getCurrentIndex();
+                    // BUSCAR hacia atras el ultimo URL que sea de tu AppSheet, saltando todos los de Google
+                    int targetIdx = -1;
+                    for(int i=curIdx-1; i>=0; i--){
+                        String u = hist.getItemAtIndex(i).getUrl();
+                        if(u==null) continue;
+                        if(u.contains("accounts.google.com") || u.contains("ServiceLogin") || u.contains("signin") || u.contains("oauth") || u.contains("consent") || u.contains("google.com/a/")){
+                            continue; // saltar google
+                        }
+                        if(u.contains("appsheet.com")){
+                            targetIdx = i;
+                            break;
+                        }
+                    }
+                    if(targetIdx==-1){
+                        // NO hay vista anterior de AppSheet, estamos en el MENU principal
+                        long now = System.currentTimeMillis();
+                        if (now - lastBackPress < 2000) { 
+                            moveTaskToBack(true);
+                            return; 
+                        }
+                        lastBackPress = now;
+                        Toast.makeText(MainActivity.this, "Presiona de nuevo para salir", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    // Si hay vista anterior de AppSheet, volver a ella (ej: de Formulario a tabla Salidas)
+                    int steps = targetIdx - curIdx;
+                    if(steps==-1){
+                        webView.goBack();
+                    }else{
+                        webView.goBackOrForward(steps);
+                    }
+                }catch(Exception e){
+                    long now = System.currentTimeMillis();
+                    if (now - lastBackPress < 2000) { moveTaskToBack(true); return; }
+                    lastBackPress = now;
+                    Toast.makeText(MainActivity.this, "Presiona de nuevo para salir", Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
     }
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data){
         super.onActivityResult(requestCode,resultCode,data);
