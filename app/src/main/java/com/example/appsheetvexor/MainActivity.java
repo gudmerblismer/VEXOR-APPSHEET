@@ -567,20 +567,41 @@ public class MainActivity extends AppCompatActivity {
             pdfOverlay.setVisibility(View.GONE); 
             return; 
         }
-        // Si puede ir atras dentro de AppSheet, que vaya atras
-        if (webView.canGoBack()){
-            webView.goBack(); 
-            return; 
-        }
-        // Si ya esta en la vista inicial, 2 toques para salir sin recargar
-        long now = System.currentTimeMillis();
-        if (now - lastBackPress < 600) { 
-            // Doble tap: minimiza la app, no la mata, asi queda en memoria
-            moveTaskToBack(true);
-            return; 
-        }
-        lastBackPress = now;
-        Toast.makeText(this, "Presiona de nuevo para salir", Toast.LENGTH_SHORT).show();
+        // INTENTO 1: Dejar que AppSheet maneje el back (formulario con popup Descartar)
+        webView.evaluateJavascript("(function(){"
+                + "try{"
+                + "var hash=(location.hash||'').toLowerCase();"
+                + "var isForm = hash.includes('form') || hash.includes('_form') || !!document.querySelector('[data-testid=\"form-view\"]') || !!document.querySelector('form');"
+                + "if(isForm){"
+                + "  // Esto dispara el popup nativo de AppSheet: Descartar / Continuar editando"
+                + "  window.history.back();"
+                + "  return 'form_handled';"
+                + "}"
+                + "return 'no_form';"
+                + "}catch(e){ return 'no_form'; }"
+                + "})()", value -> {
+            String v = value!=null ? value.replace("\"","") : "no_form";
+            if("form_handled".equals(v)){
+                // AppSheet ya mostró el popup de descartar, no hacemos nada más
+                return;
+            }
+            // INTENTO 2: No es formulario, es navegación normal
+            runOnUiThread(() -> {
+                if (webView.canGoBack()){
+                    // Si puede volver atrás dentro de AppSheet, vuelve (sin salir)
+                    webView.goBack();
+                    return;
+                }
+                // Si ya está en la vista inicial, 2 toques para minimizar
+                long now = System.currentTimeMillis();
+                if (now - lastBackPress < 2000) { 
+                    moveTaskToBack(true);
+                    return; 
+                }
+                lastBackPress = now;
+                Toast.makeText(MainActivity.this, "Presiona de nuevo para salir", Toast.LENGTH_SHORT).show();
+            });
+        });
     }
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data){
         super.onActivityResult(requestCode,resultCode,data);
