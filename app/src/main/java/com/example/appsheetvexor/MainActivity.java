@@ -250,7 +250,7 @@ public class MainActivity extends AppCompatActivity {
                         + "document.addEventListener('focusout',function(e){ var el=e.target; if(el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA') return; setTimeout(function(){ var active=document.activeElement; if(!active || active.tagName!=='INPUT' && active.tagName!=='TEXTAREA'){ try{window.AndroidQR.hideBtn();}catch(err){} currentQrField=null; return; } var label=getLabel(active); if(label.indexOf('QR')==-1){ try{window.AndroidQR.hideBtn();}catch(err){} currentQrField=null; } },300); });"
                         + "document.addEventListener('click',function(e){ var el=e.target; if(el.closest && el.closest('#vexor-license-panel')) return; if(currentQrField && el!==currentQrField && el.tagName!=='INPUT' && el.tagName!=='TEXTAREA'){ setTimeout(function(){ if(document.activeElement!==currentQrField){ try{window.AndroidQR.hideBtn();}catch(err){} } },100); } });"
                         + "window.addEventListener('hashchange',function(){ handleViewChange(); setTimeout(function(){ embeber(); inyectarPanelLicencias(); },200); });"
-                        + "setInterval(function(){ handleViewChange(); embeber(); inyectarPanelLicencias(); },1000); precargarReportes(); embeber(); inyectarPanelLicencias();"
+                        + "setInterval(function(){ handleViewChange(); embeber(); inyectarPanelLicencias(); },1000); embeber(); inyectarPanelLicencias(); setTimeout(function(){ precargarReportes(); }, 2500);"
                         + "})()";
                 view.evaluateJavascript(js,null);
                 mostrarUpsellSiEsNecesario();
@@ -567,32 +567,13 @@ public class MainActivity extends AppCompatActivity {
             pdfOverlay.setVisibility(View.GONE); 
             return; 
         }
-
-        // Evaluamos con JS si estamos en formulario para disparar el popup nativo de AppSheet
+        // INTENTO 1: Dejar que AppSheet maneje el back (formulario con popup Descartar)
         webView.evaluateJavascript("(function(){"
                 + "try{"
                 + "var hash=(location.hash||'').toLowerCase();"
-                + "var isForm = hash.includes('form') || !!document.querySelector('[data-testid=\"form-view\"]') || !!document.querySelector('form');"
+                + "var isForm = hash.includes('form') || hash.includes('_form') || !!document.querySelector('[data-testid=\"form-view\"]') || !!document.querySelector('form');"
                 + "if(isForm){"
-                + "  // Buscar el boton ATRAS de AppSheet que dispara el popup Descartar"
-                + "  var sels=["
-                + "    'button[aria-label=\"Back\"]',"
-                + "    'button[aria-label=\"Atrás\"]',"
-                + "    '[data-testid=\"header-back-button\"]',"
-                + "    'header button',"
-                + "    'div[role=\"button\"]'"
-                + "  ];"
-                + "  for(var i=0;i<sels.length;i++){"
-                + "    var els=document.querySelectorAll(sels[i]);"
-                + "    for(var j=0;j<els.length;j++){"
-                + "      var el=els[j];"
-                + "      var txt=(el.innerText||'')+(el.getAttribute('aria-label')||'');"
-                + "      if(el.offsetParent!==null){"
-                + "        el.click();"
-                + "        return 'form_handled';"
-                + "      }"
-                + "    }"
-                + "  }"
+                + "  // Esto dispara el popup nativo de AppSheet: Descartar / Continuar editando"
                 + "  window.history.back();"
                 + "  return 'form_handled';"
                 + "}"
@@ -601,41 +582,24 @@ public class MainActivity extends AppCompatActivity {
                 + "})()", value -> {
             String v = value!=null ? value.replace("\"","") : "no_form";
             if("form_handled".equals(v)){
-                // Ya se disparo el popup de AppSheet "Descartar cambios / Continuar editando"
+                // AppSheet ya mostró el popup de descartar, no hacemos nada más
                 return;
             }
+            // INTENTO 2: No es formulario, es navegación normal
             runOnUiThread(() -> {
-                try{
-                    android.webkit.WebBackForwardList hist = webView.copyBackForwardList();
-                    int curIdx = hist.getCurrentIndex();
-                    if(curIdx>0){
-                        String prevUrl = hist.getItemAtIndex(curIdx-1).getUrl();
-                        if(prevUrl!=null && (prevUrl.contains("accounts.google.com") || prevUrl.contains("ServiceLogin") || prevUrl.contains("signin") || prevUrl.contains("oauth") || prevUrl.contains("consent"))){
-                            // Estamos en la primera vista del MENU, no volver al login de Google
-                            long now = System.currentTimeMillis();
-                            if (now - lastBackPress < 2000) { 
-                                moveTaskToBack(true);
-                                return; 
-                            }
-                            lastBackPress = now;
-                            Toast.makeText(MainActivity.this, "Presiona de nuevo para salir", Toast.LENGTH_SHORT).show();
-                            return;
-                        }
-                    }
-                    if (webView.canGoBack()){
-                        webView.goBack();
-                        return;
-                    }
-                    long now = System.currentTimeMillis();
-                    if (now - lastBackPress < 2000) { 
-                        moveTaskToBack(true);
-                        return; 
-                    }
-                    lastBackPress = now;
-                    Toast.makeText(MainActivity.this, "Presiona de nuevo para salir", Toast.LENGTH_SHORT).show();
-                }catch(Exception e){
-                    moveTaskToBack(true);
+                if (webView.canGoBack()){
+                    // Si puede volver atrás dentro de AppSheet, vuelve (sin salir)
+                    webView.goBack();
+                    return;
                 }
+                // Si ya está en la vista inicial, 2 toques para minimizar
+                long now = System.currentTimeMillis();
+                if (now - lastBackPress < 2000) { 
+                    moveTaskToBack(true);
+                    return; 
+                }
+                lastBackPress = now;
+                Toast.makeText(MainActivity.this, "Presiona de nuevo para salir", Toast.LENGTH_SHORT).show();
             });
         });
     }
