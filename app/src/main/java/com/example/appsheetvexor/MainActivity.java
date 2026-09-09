@@ -568,7 +568,12 @@ public class MainActivity extends AppCompatActivity {
             return; 
         }
         long now = System.currentTimeMillis();
-        if (now - lastBackPress < 600) { webView.clearHistory(); webView.loadUrl(APPSHEET_URL); finishAffinity(); return; }
+        if (now - lastBackPress < 600) { 
+            webView.clearHistory(); 
+            webView.loadUrl(APPSHEET_URL); 
+            moveTaskToBack(true); 
+            return; 
+        }
         lastBackPress = now;
         if (webView.canGoBack()){ webView.goBack(); return; }
         super.onBackPressed();
