@@ -578,6 +578,13 @@ public class MainActivity extends AppCompatActivity {
         if (webView.canGoBack()){ webView.goBack(); return; }
         super.onBackPressed();
     }
+    @Override
+    protected void onStop(){
+        super.onStop();
+        // Fuerza guardar las cookies de sesion en disco cada vez que la app se oculta
+        // (doble atras, boton Home, cambio de app, etc) para no perder el login.
+        CookieManager.getInstance().flush();
+    }
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data){
         super.onActivityResult(requestCode,resultCode,data);
         IntentResult r=IntentIntegrator.parseActivityResult(requestCode,resultCode,data);
