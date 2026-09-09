@@ -559,6 +559,20 @@ public class MainActivity extends AppCompatActivity {
     }
     private void copiarADescargas(File src){ try{ File dst = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), src.getName()); FileInputStream in = new FileInputStream(src); FileOutputStream out = new FileOutputStream(dst); byte[] buf = new byte[4096]; int len; while((len = in.read(buf)) > 0) out.write(buf, 0, len); in.close(); out.close(); }catch(Exception e){ e.printStackTrace(); } }
     private void abrirScanner(){ IntentIntegrator i=new IntentIntegrator(this); i.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE); i.setPrompt("Escanea el QR"); i.setBeepEnabled(true); i.setOrientationLocked(false); i.initiateScan(); }
+    // Salta a la primera entrada del historial del WebView (la vista Menu) SIN pedir red,
+    // ya que la navegacion interna de AppSheet es por hash (#view=...) y goBackOrForward
+    // solo dispara el evento hashchange dentro de la misma pagina ya cargada.
+    // Luego limpia el historial para que Salidas/Detalles ya no queden accesibles con "atras".
+    private void irAVistaInicialSinRecargar(){
+        try{
+            android.webkit.WebBackForwardList list = webView.copyBackForwardList();
+            int currentIndex = list.getCurrentIndex();
+            if(currentIndex > 0){
+                webView.goBackOrForward(-currentIndex);
+            }
+            webView.clearHistory();
+        }catch(Exception e){}
+    }
     @Override public void onBackPressed() {
         if(recorder!=null){ detenerAudio(); return; }
         if(pdfOverlay.getVisibility()==View.VISIBLE){ 
@@ -569,14 +583,15 @@ public class MainActivity extends AppCompatActivity {
         }
         long now = System.currentTimeMillis();
         if (now - lastBackPress < 600) { 
-            webView.clearHistory(); 
-            webView.loadUrl(APPSHEET_URL); 
+            // doble clic en cualquier vista: vuelve al Menu sin red y oculta la app
+            irAVistaInicialSinRecargar();
             moveTaskToBack(true); 
             return; 
         }
         lastBackPress = now;
         if (webView.canGoBack()){ webView.goBack(); return; }
-        super.onBackPressed();
+        // ya estamos en la vista inicial (Menu): un solo atras oculta la app, no la recarga ni la destruye
+        moveTaskToBack(true);
     }
     @Override
     protected void onStop(){
